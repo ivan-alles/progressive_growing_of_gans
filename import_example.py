@@ -27,7 +27,11 @@ tf.compat.v1.InteractiveSession()
 
 # Import official CelebA-HQ networks.
 with open('karras2018iclr-celebahq-1024x1024.pkl', 'rb') as file:
-    G, D, Gs = pickle.load(file)
+    #  Replace calls like shape[0].value because shape now contains integers.
+    text = file.read()
+    text = text.replace(b'.value', b'      ')
+    G, D, Gs = pickle.loads(text)
+    del text
 
 # Generate latent vectors.
 latents = np.random.RandomState(1000).randn(1000, *Gs.input_shapes[0][1:]) # 1000 random latents
