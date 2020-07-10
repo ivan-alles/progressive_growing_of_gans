@@ -24,7 +24,7 @@ def is_tf_expression(x):
     return isinstance(x, tf.Tensor) or isinstance(x, tf.Variable) or isinstance(x, tf.Operation)
 
 def shape_to_list(shape):
-    return [dim.value for dim in shape]
+    return [dim.value if hasattr(dim, 'value') else dim for dim in shape]
 
 def flatten(x):
     with tf.name_scope('Flatten'):
