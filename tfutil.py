@@ -682,10 +682,9 @@ class Network:
         """
 
         if not hasattr(self, 'model'):
-            with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
-                self.model = self.get_output_for(*self.input_templates)
+            self.model = self.get_output_for(*self.input_templates)
 
-        labels = np.zeros([latents.shape[0]] + self.input_shapes[1][1:])
+        labels = np.zeros([latents.shape[0]] + self.input_templates[1].shape[1:])
 
         feed_dict = {
             self.input_templates[0]: latents,
