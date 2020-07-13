@@ -702,9 +702,16 @@ class Network:
             with tf.variable_scope(self.scope, reuse=True):
                 assert tf.get_variable_scope().name == self.scope
                 named_inputs = [tf.identity(expr, name=name) for expr, name in zip(self.input_templates, self.input_names)]
-                out_expr = self._build_func(*named_inputs, **self.static_kwargs)
-            assert is_tf_expression(out_expr) or isinstance(out_expr, tuple)
-            self.model = out_expr
+                output = self._build_func(*named_inputs, **self.static_kwargs)
+
+                latent_inputs = tf.keras.Input(shape=self.input_templates[0].shape, name=self.input_names[0])
+                label_inputs = tf.keras.Input(shape=self.input_templates[1].shape, name=self.input_names[1])
+
+                keras_model = tf.keras.Model(inputs=(latent_inputs, label_inputs), outputs=output)
+                tf.keras.utils.plot_model(keras_model, to_file='model.svg', dpi=50, show_shapes=True)
+
+            assert is_tf_expression(output) or isinstance(output, tuple)
+            self.model = output
 
             #self.model = tf.keras.Model(inputs=tuple(self.input_templates), outputs=output)
             #tf.keras.utils.plot_model(self.model, to_file='model.svg', dpi=50, show_shapes=True)
