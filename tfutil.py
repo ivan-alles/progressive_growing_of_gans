@@ -676,6 +676,39 @@ class Network:
             out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
         return out_arrays
 
+    def run_simple(self, latents):
+        """
+        A simplified version of run().
+        """
+        labels = np.zeros([latents.shape[0]] + self.input_shapes[1][1:])
+
+        in_arrays = [latents, labels]
+
+        num_items = latents.shape[0]
+        minibatch_size = num_items
+
+        if not hasattr(self, 'model'):
+            with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
+                in_split = list(zip(*[tf.split(x, 1) for x in self.input_templates]))
+                out_split = []
+                gpu = 0
+                with tf.device('/gpu:0'):
+                    out_expr = self.get_output_for(*in_split[gpu], return_as_list=True)
+                    out_split.append(out_expr)
+                self.model = [tf.concat(outputs, axis=0) for outputs in zip(*out_split)]
+
+        # Run minibatches.
+        out_expr = self.model
+        out_arrays = [np.empty([num_items] + shape_to_list(expr.shape)[1:], expr.dtype.name) for expr in out_expr]
+        for mb_begin in range(0, num_items, minibatch_size):
+            mb_end = min(mb_begin + minibatch_size, num_items)
+            mb_in = [src[mb_begin : mb_end] for src in in_arrays]
+            mb_out = tf.get_default_session().run(out_expr, dict(zip(self.input_templates, mb_in)))
+            for dst, src in zip(out_arrays, mb_out):
+                dst[mb_begin : mb_end] = src
+
+        return out_arrays
+
     # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
     # individual layers of the network. Mainly intended to be used for reporting.
     def list_layers(self):
