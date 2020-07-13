@@ -42,7 +42,7 @@ latents = np.random.RandomState(1000).randn(1000, *Gs.input_shapes[0][1:])  # 10
 latents = latents[[477, 56, 83, 887, 583, 391, 86, 340, 341, 415]]  # hand-picked top-10
 
 # Run the generator to produce a set of images.
-images = Gs.run_simple(latents)[0]
+images = Gs.run_simple(latents)
 
 # Convert images to PIL-compatible format.
 images = np.clip(np.rint((images + 1.0) / 2.0 * 255.0), 0.0, 255.0).astype(np.uint8)  # [-1,1] => [0,255]
