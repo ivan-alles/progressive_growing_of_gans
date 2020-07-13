@@ -687,7 +687,11 @@ class Network:
 
         labels = np.zeros([latents.shape[0]] + self.input_shapes[1][1:])
 
-        output = tf.get_default_session().run(self.model, dict(zip(self.input_templates, [latents, labels])))
+        feed_dict = {
+            self.input_templates[0]: latents,
+            self.input_templates[1]: labels
+        }
+        output = tf.get_default_session().run(self.model, feed_dict)
         return output
 
     # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
