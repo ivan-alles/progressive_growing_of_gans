@@ -693,6 +693,36 @@ class Network:
         output = tf.get_default_session().run(self.model, feed_dict)
         return output
 
+    def run_keras(self, latents):
+        """
+        Creates and runs a tf.keras model.
+        """
+
+        if not hasattr(self, 'model'):
+            with tf.variable_scope(self.scope, reuse=True):
+                assert tf.get_variable_scope().name == self.scope
+                named_inputs = [tf.identity(expr, name=name) for expr, name in zip(self.input_templates, self.input_names)]
+                out_expr = self._build_func(*named_inputs, **self.static_kwargs)
+            assert is_tf_expression(out_expr) or isinstance(out_expr, tuple)
+            self.model = out_expr
+
+            #self.model = tf.keras.Model(inputs=tuple(self.input_templates), outputs=output)
+            #tf.keras.utils.plot_model(self.model, to_file='model.svg', dpi=50, show_shapes=True)
+
+
+
+        labels = np.zeros([latents.shape[0]] + self.input_templates[1].shape[1:])
+
+        # output = self.model.predict([latents, labels])
+
+        feed_dict = {
+            self.input_templates[0]: latents,
+            self.input_templates[1]: labels
+        }
+        output = tf.get_default_session().run(self.model, feed_dict)
+        return output
+
+
     # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
     # individual layers of the network. Mainly intended to be used for reporting.
     def list_layers(self):
