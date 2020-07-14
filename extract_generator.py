@@ -45,7 +45,7 @@ with open('karras2018iclr-celebahq-1024x1024.pkl', 'rb') as file:
     G, D, Gs = unpickler.load()
 
 # Generate latent vectors.
-latents = np.random.RandomState(1000).randn(1000, *Gs.input_shapes[0][1:])  # 1000 random latents
+latents = np.random.RandomState(1000).randn(1000, *Gs.latent_inputs.shape[1:])  # 1000 random latents
 latents = latents[[477, 56, 83, 887, 583, 391, 86, 340, 341, 415]]  # hand-picked top-10
 
 # Run the generator to produce a set of images.

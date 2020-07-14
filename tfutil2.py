@@ -173,29 +173,44 @@ class Network:
         assert self.num_inputs >= 1
 
         self.scope = tf.get_default_graph().unique_name(self.name.replace('/', '_'), mark_as_used=False)
-        
-        # Build template graph.
-        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-            assert tf.get_variable_scope().name == self.scope
-            with absolute_name_scope(self.scope): # ignore surrounding name_scope
-                with tf.control_dependencies(None): # ignore surrounding control_dependencies
-                    self.input_templates = [tf.placeholder(tf.float32, name=name) for name in self.input_names]
-                    out_expr = self._build_func(*self.input_templates, is_template_graph=True, **self.static_kwargs)
-            
-        # Collect outputs.
-        assert is_tf_expression(out_expr) or isinstance(out_expr, tuple)
-        self.output_templates = [out_expr] if is_tf_expression(out_expr) else list(out_expr)
-        self.output_names = [t.name.split('/')[-1].split(':')[0] for t in self.output_templates]
-        self.num_outputs = len(self.output_templates)
-        assert self.num_outputs >= 1
-        
-        # Populate remaining fields.
-        self.input_shapes   = [shape_to_list(t.shape) for t in self.input_templates]
-        self.output_shapes  = [shape_to_list(t.shape) for t in self.output_templates]
-        self.input_shape    = self.input_shapes[0]
-        self.output_shape   = self.output_shapes[0]
-        self.vars           = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
-        self.trainables     = OrderedDict([(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
+
+        if False:
+            # Build template graph.
+            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+                assert tf.get_variable_scope().name == self.scope
+                with absolute_name_scope(self.scope): # ignore surrounding name_scope
+                    with tf.control_dependencies(None): # ignore surrounding control_dependencies
+                        self.input_templates = [tf.placeholder(tf.float32, name=name) for name in self.input_names]
+                        out_expr = self._build_func(*self.input_templates, is_template_graph=True, **self.static_kwargs)
+
+            # Collect outputs.
+            assert is_tf_expression(out_expr) or isinstance(out_expr, tuple)
+            self.output_templates = [out_expr] if is_tf_expression(out_expr) else list(out_expr)
+            self.output_names = [t.name.split('/')[-1].split(':')[0] for t in self.output_templates]
+            self.num_outputs = len(self.output_templates)
+            assert self.num_outputs >= 1
+
+            # Populate remaining fields.
+            self.input_shapes = [shape_to_list(t.shape) for t in self.input_templates]
+            self.output_shapes = [shape_to_list(t.shape) for t in self.output_templates]
+            self.input_shape = self.input_shapes[0]
+            self.output_shape = self.output_shapes[0]
+            self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
+            self.trainables = OrderedDict(
+                [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
+
+        else:
+            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+                assert tf.get_variable_scope().name == self.scope
+                self.latent_inputs = tf.keras.Input(name=self.input_names[0], shape=[None])
+                self.label_inputs = tf.keras.Input(name=self.input_names[1], shape=[None])
+                self.output = self._build_func(self.latent_inputs, self.label_inputs, **self.static_kwargs)
+
+            self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
+            self.trainables = OrderedDict(
+                [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
+
+
 
     # Run initializers for all variables defined by this network.
     def reset_vars(self):
@@ -262,6 +277,7 @@ class Network:
         self.reset_vars()
         set_vars({self.find_var(name): value for name, value in state['variables']})
 
+
     # Create a clone of this network with its own copy of the variables.
     def clone(self, name=None):
         net = object.__new__(Network)
@@ -309,19 +325,19 @@ class Network:
         A simplified version of run() for the generator model.
         """
 
-        if not hasattr(self, 'model'):
-            with tf.variable_scope(self.scope, reuse=True):
-                assert tf.get_variable_scope().name == self.scope
-                named_inputs = [tf.identity(expr, name=name) for expr, name in zip(self.input_templates, self.input_names)]
-                self.model = self._build_func(*named_inputs, **self.static_kwargs)
+        # if not hasattr(self, 'model'):
+        #     with tf.variable_scope(self.scope, reuse=True):
+        #         assert tf.get_variable_scope().name == self.scope
+        #         named_inputs = [tf.identity(expr, name=name) for expr, name in zip(self.input_templates, self.input_names)]
+        #         self.model = self._build_func(*named_inputs, **self.static_kwargs)
 
-        labels = np.zeros([latents.shape[0]] + self.input_templates[1].shape[1:])
+        labels = np.zeros([len(latents)] + self.label_inputs.shape[1:])
 
         feed_dict = {
-            self.input_templates[0]: latents,
-            self.input_templates[1]: labels
+            self.latent_inputs: latents,
+            self.label_inputs: labels
         }
-        output = tf.get_default_session().run(self.model, feed_dict)
+        output = tf.get_default_session().run(self.output, feed_dict)
         return output
 
     def run_keras(self, latents):
