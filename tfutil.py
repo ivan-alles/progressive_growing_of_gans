@@ -682,7 +682,10 @@ class Network:
         """
 
         if not hasattr(self, 'model'):
-            self.model = self.get_output_for(*self.input_templates)
+            with tf.variable_scope(self.scope, reuse=True):
+                assert tf.get_variable_scope().name == self.scope
+                named_inputs = [tf.identity(expr, name=name) for expr, name in zip(self.input_templates, self.input_names)]
+                self.model = self._build_func(*named_inputs, **self.static_kwargs)
 
         labels = np.zeros([latents.shape[0]] + self.input_templates[1].shape[1:])
 
