@@ -135,38 +135,6 @@ network_import_handlers = []    # Custom import handlers for dealing with legacy
 _network_import_modules = []    # Temporary modules create during pickle import.
 
 class Network:
-    def __init__(self,
-        name=None,          # Network name. Used to select TensorFlow name and variable scopes.
-        func=None,          # Fully qualified name of the underlying network construction function.
-        **static_kwargs):   # Keyword arguments to be passed in to the network construction function.
-
-        self._init_fields()
-        self.name = name
-        self.static_kwargs = dict(static_kwargs)
-
-        # Init graph.
-        self._init_graph()
-        self.reset_vars()
-
-    def _init_fields(self):
-        self.name               = None          # User-specified name, defaults to build func name if None.
-        self.scope              = None          # Unique TF graph scope, derived from the user-specified name.
-        self.static_kwargs      = dict()        # Arguments passed to the user-supplied build func.
-        self.num_inputs         = 0             # Number of input tensors.
-        self.num_outputs        = 0             # Number of output tensors.
-        self.input_shapes       = [[]]          # Input tensor shapes (NC or NCHW), including minibatch dimension.
-        self.output_shapes      = [[]]          # Output tensor shapes (NC or NCHW), including minibatch dimension.
-        self.input_shape        = []            # Short-hand for input_shapes[0].
-        self.output_shape       = []            # Short-hand for output_shapes[0].
-        self.input_templates    = []            # Input placeholders in the template graph.
-        self.output_templates   = []            # Output tensors in the template graph.
-        self.input_names        = []            # Name string for each input.
-        self.output_names       = []            # Name string for each output.
-        self.vars               = OrderedDict() # All variables (localname => var).
-        self.trainables         = OrderedDict() # Trainable variables (localname => var).
-        self._run_cache         = dict()        # Cached graph data for Network.run().
-        self._build_func = networks2.G_paper
-        
     def _init_graph(self):
         self.input_names = ['latents_in', 'labels_in']
         self.num_inputs = len(self.input_names)
@@ -174,42 +142,15 @@ class Network:
 
         self.scope = tf.get_default_graph().unique_name(self.name.replace('/', '_'), mark_as_used=False)
 
-        if False:
-            # Build template graph.
-            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-                assert tf.get_variable_scope().name == self.scope
-                with absolute_name_scope(self.scope): # ignore surrounding name_scope
-                    with tf.control_dependencies(None): # ignore surrounding control_dependencies
-                        self.input_templates = [tf.placeholder(tf.float32, name=name) for name in self.input_names]
-                        out_expr = self._build_func(*self.input_templates, is_template_graph=True, **self.static_kwargs)
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+            assert tf.get_variable_scope().name == self.scope
+            self.latent_inputs = tf.keras.Input(name=self.input_names[0], shape=[None])
+            self.label_inputs = tf.keras.Input(name=self.input_names[1], shape=[None])
+            self.output = networks2.G_paper(self.latent_inputs, self.label_inputs, **self.static_kwargs)
 
-            # Collect outputs.
-            assert is_tf_expression(out_expr) or isinstance(out_expr, tuple)
-            self.output_templates = [out_expr] if is_tf_expression(out_expr) else list(out_expr)
-            self.output_names = [t.name.split('/')[-1].split(':')[0] for t in self.output_templates]
-            self.num_outputs = len(self.output_templates)
-            assert self.num_outputs >= 1
-
-            # Populate remaining fields.
-            self.input_shapes = [shape_to_list(t.shape) for t in self.input_templates]
-            self.output_shapes = [shape_to_list(t.shape) for t in self.output_templates]
-            self.input_shape = self.input_shapes[0]
-            self.output_shape = self.output_shapes[0]
-            self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
-            self.trainables = OrderedDict(
-                [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
-
-        else:
-            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-                assert tf.get_variable_scope().name == self.scope
-                self.latent_inputs = tf.keras.Input(name=self.input_names[0], shape=[None])
-                self.label_inputs = tf.keras.Input(name=self.input_names[1], shape=[None])
-                self.output = self._build_func(self.latent_inputs, self.label_inputs, **self.static_kwargs)
-
-            self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
-            self.trainables = OrderedDict(
-                [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
-
+        self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
+        self.trainables = OrderedDict(
+            [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
 
 
     # Run initializers for all variables defined by this network.
@@ -261,7 +202,6 @@ class Network:
         if UNPICKLE_COUNTER != 3:
             # Skip unused objects.
             return
-        self._init_fields()
 
         # Execute custom import handlers.
         for handler in network_import_handlers:
@@ -324,57 +264,13 @@ class Network:
         """
         A simplified version of run() for the generator model.
         """
-
-        # if not hasattr(self, 'model'):
-        #     with tf.variable_scope(self.scope, reuse=True):
-        #         assert tf.get_variable_scope().name == self.scope
-        #         named_inputs = [tf.identity(expr, name=name) for expr, name in zip(self.input_templates, self.input_names)]
-        #         self.model = self._build_func(*named_inputs, **self.static_kwargs)
-
         labels = np.zeros([len(latents)] + self.label_inputs.shape[1:])
-
         feed_dict = {
             self.latent_inputs: latents,
             self.label_inputs: labels
         }
-        output = tf.get_default_session().run(self.output, feed_dict)
-        return output
-
-    def run_keras(self, latents):
-        """
-        Creates and runs a tf.keras model.
-        """
-
-        if not hasattr(self, 'model'):
-            with tf.variable_scope(self.scope, reuse=True):
-                assert tf.get_variable_scope().name == self.scope
-                named_inputs = [tf.identity(expr, name=name) for expr, name in zip(self.input_templates, self.input_names)]
-                output = self._build_func(*named_inputs, **self.static_kwargs)
-
-                latent_inputs = tf.keras.Input(shape=self.input_templates[0].shape, name=self.input_names[0])
-                label_inputs = tf.keras.Input(shape=self.input_templates[1].shape, name=self.input_names[1])
-
-                keras_model = tf.keras.Model(inputs=(latent_inputs, label_inputs), outputs=output)
-                tf.keras.utils.plot_model(keras_model, to_file='model.svg', dpi=50, show_shapes=True)
-
-            assert is_tf_expression(output) or isinstance(output, tuple)
-            self.model = output
-
-            #self.model = tf.keras.Model(inputs=tuple(self.input_templates), outputs=output)
-            #tf.keras.utils.plot_model(self.model, to_file='model.svg', dpi=50, show_shapes=True)
-
-
-
-        labels = np.zeros([latents.shape[0]] + self.input_templates[1].shape[1:])
-
-        # output = self.model.predict([latents, labels])
-
-        feed_dict = {
-            self.input_templates[0]: latents,
-            self.input_templates[1]: labels
-        }
-        output = tf.get_default_session().run(self.model, feed_dict)
-        return output
+        result = tf.get_default_session().run(self.output, feed_dict)
+        return result
 
 
     # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
