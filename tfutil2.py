@@ -12,6 +12,9 @@ from collections import OrderedDict
 import tensorflow as tf
 import networks2
 
+# Use it to skip unpickling unnecessary objects.
+UNPICKLE_COUNTER = 0
+
 #----------------------------------------------------------------------------
 # Convenience.
 
@@ -238,8 +241,10 @@ class Network:
 
     # Pickle import.
     def __setstate__(self, state):
-        if state['name'] == 'D_paper':
-            # Do not support the discriminator in tf2.
+        global UNPICKLE_COUNTER
+        UNPICKLE_COUNTER += 1
+        if UNPICKLE_COUNTER != 3:
+            # Skip unused objects.
             return
         self._init_fields()
 

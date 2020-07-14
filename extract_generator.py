@@ -40,11 +40,7 @@ class MyUnpickler(pickle.Unpickler):
 
 # Import official CelebA-HQ networks.
 with open('karras2018iclr-celebahq-1024x1024.pkl', 'rb') as file:
-    #  Replace calls like shape[0].value because shape now contains integers.
-    # text = file.read()
-    # text = text.replace(b'.value', b'      ')
-    # G, D, Gs = pickle.loads(text, fix_imports=False)
-    # del text
+    tfutil2.UNPICKLE_COUNTER = 0
     unpickler = MyUnpickler(file)
     G, D, Gs = unpickler.load()
 
