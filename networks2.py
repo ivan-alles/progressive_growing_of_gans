@@ -107,7 +107,6 @@ def G_paper(
     pixelnorm_epsilon   = 1e-8,         # Constant epsilon for pixelwise feature vector normalization.
     use_leakyrelu       = True,         # True = leaky ReLU, False = ReLU.
     dtype               = 'float32',    # Data type to use for activations and outputs.
-    fused_scale         = True,         # True = use fused upscale2d + conv2d, False = separate upscale2d layers.
     **kwargs):                          # Ignore unrecognized keyword args.
     
     resolution_log2 = int(np.log2(resolution))
@@ -134,13 +133,9 @@ def G_paper(
                 with tf.variable_scope('Conv'):
                     x = PN(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
             else: # 8x8 and up
-                if fused_scale:
-                    with tf.variable_scope('Conv0_up'):
-                        x = PN(act(apply_bias(upscale2d_conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
-                else:
-                    x = upscale2d(x)
-                    with tf.variable_scope('Conv0'):
-                        x = PN(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
+                x = upscale2d(x)
+                with tf.variable_scope('Conv0'):
+                    x = PN(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
                 with tf.variable_scope('Conv1'):
                     x = PN(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
             return x
