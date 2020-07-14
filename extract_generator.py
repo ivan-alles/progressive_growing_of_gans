@@ -7,6 +7,8 @@ import numpy as np
 import tensorflow as tf
 import PIL.Image
 
+import tfutil2
+
 #  Needed for tf.compat.v1.placeholder
 tf.compat.v1.disable_eager_execution()
 
@@ -29,13 +31,22 @@ tf.assign = tf.compat.v1.assign
 # Initialize TensorFlow session.
 tf.compat.v1.InteractiveSession()
 
+class MyUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == 'tfutil' and name == 'Network':
+            return tfutil2.Network
+        return super().find_class(module, name)
+
+
 # Import official CelebA-HQ networks.
 with open('karras2018iclr-celebahq-1024x1024.pkl', 'rb') as file:
     #  Replace calls like shape[0].value because shape now contains integers.
-    text = file.read()
-    text = text.replace(b'.value', b'      ')
-    G, D, Gs = pickle.loads(text)
-    del text
+    # text = file.read()
+    # text = text.replace(b'.value', b'      ')
+    # G, D, Gs = pickle.loads(text, fix_imports=False)
+    # del text
+    unpickler = MyUnpickler(file)
+    G, D, Gs = unpickler.load()
 
 # Generate latent vectors.
 latents = np.random.RandomState(1000).randn(1000, *Gs.input_shapes[0][1:])  # 1000 random latents
