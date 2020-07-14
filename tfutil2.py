@@ -85,23 +85,25 @@ class Network:
 
         self.scope = tf.get_default_graph().unique_name(self.name.replace('/', '_'), mark_as_used=False)
 
-        # with tf.device('/CPU:0'):
-        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-            assert tf.get_variable_scope().name == self.scope
-            self.latent_inputs = tf.keras.Input(name='latents_in', shape=[None])
-            self.label_inputs = tf.keras.Input(name='labels_in', shape=[None])
-            self.output = networks2.G_paper(self.latent_inputs, self.label_inputs, **self.static_kwargs)
+        mirrored_strategy = tf.distribute.MirroredStrategy()
+
+        with mirrored_strategy.scope():
+            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+                assert tf.get_variable_scope().name == self.scope
+                self.latent_inputs = tf.keras.Input(name='latents_in', shape=[None])
+                self.label_inputs = tf.keras.Input(name='labels_in', shape=[None])
+                self.output = networks2.G_paper(self.latent_inputs, self.label_inputs, **self.static_kwargs)
 
 
-        self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
-        self.trainables = OrderedDict(
-            [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
+            self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
+            self.trainables = OrderedDict(
+                [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
 
-        self.reset_vars()
-        set_vars({self.find_var(name): value for name, value in state['variables']})
+            self.reset_vars()
+            set_vars({self.find_var(name): value for name, value in state['variables']})
 
-        # self.keras_model = tf.keras.Model(inputs=(self.latent_inputs, self.label_inputs), outputs=self.output)
-        # tf.keras.utils.plot_model(self.keras_model, to_file='model.svg', dpi=50, show_shapes=True)
+            self.keras_model = tf.keras.Model(inputs=(self.latent_inputs, self.label_inputs), outputs=self.output)
+            tf.keras.utils.plot_model(self.keras_model, to_file='model.svg', dpi=50, show_shapes=True)
 
 
     def run(self, latents):
