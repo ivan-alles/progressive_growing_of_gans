@@ -13,6 +13,7 @@ import imp
 import numpy as np
 from collections import OrderedDict
 import tensorflow as tf
+import networks2
 
 #----------------------------------------------------------------------------
 # Convenience.
@@ -423,11 +424,6 @@ class Network:
         self.name = name
         self.static_kwargs = dict(static_kwargs)
 
-        # Init build func.
-        module, self._build_func_name = import_module(func)
-        self._build_module_src = inspect.getsource(module)
-        self._build_func = find_obj_in_module(module, self._build_func_name)
-
         # Init graph.
         self._init_graph()
         self.reset_vars()
@@ -448,23 +444,14 @@ class Network:
         self.output_names       = []            # Name string for each output.
         self.vars               = OrderedDict() # All variables (localname => var).
         self.trainables         = OrderedDict() # Trainable variables (localname => var).
-        self._build_func        = None          # User-supplied build function that constructs the network.
-        self._build_func_name   = None          # Name of the build function.
-        self._build_module_src  = None          # Full source code of the module containing the build function.
         self._run_cache         = dict()        # Cached graph data for Network.run().
+        self._build_func = networks2.G_paper
         
     def _init_graph(self):
-        # Collect inputs.
-        self.input_names = []
-        for param in inspect.signature(self._build_func).parameters.values():
-            if param.kind == param.POSITIONAL_OR_KEYWORD and param.default is param.empty:
-                self.input_names.append(param.name)
+        self.input_names = ['latents_in', 'labels_in']
         self.num_inputs = len(self.input_names)
         assert self.num_inputs >= 1
 
-        # Choose name and scope.
-        if self.name is None:
-            self.name = self._build_func_name
         self.scope = tf.get_default_graph().unique_name(self.name.replace('/', '_'), mark_as_used=False)
         
         # Build template graph.
@@ -497,20 +484,6 @@ class Network:
     # Run initializers for all trainable variables defined by this network.
     def reset_trainables(self):
         run([var.initializer for var in self.trainables.values()])
-
-    # Get TensorFlow expression(s) for the output(s) of this network, given the inputs.
-    def get_output_for(self, *in_expr, return_as_list=False, **dynamic_kwargs):
-        assert len(in_expr) == self.num_inputs
-        all_kwargs = dict(self.static_kwargs)
-        all_kwargs.update(dynamic_kwargs)
-        with tf.variable_scope(self.scope, reuse=True):
-            assert tf.get_variable_scope().name == self.scope
-            named_inputs = [tf.identity(expr, name=name) for expr, name in zip(in_expr, self.input_names)]
-            out_expr = self._build_func(*named_inputs, **all_kwargs)
-        assert is_tf_expression(out_expr) or isinstance(out_expr, tuple)
-        if return_as_list:
-            out_expr = [out_expr] if is_tf_expression(out_expr) else list(out_expr)
-        return out_expr
 
     # Get the local name of a given variable, excluding any surrounding name scopes.
     def get_var_localname(self, var_or_globalname):
@@ -548,6 +521,9 @@ class Network:
 
     # Pickle import.
     def __setstate__(self, state):
+        if state['name'] == 'D_paper':
+            # Do not support the discriminator in tf2.
+            return
         self._init_fields()
 
         # Execute custom import handlers.
@@ -558,15 +534,7 @@ class Network:
         assert state['version'] == 2
         self.name = state['name']
         self.static_kwargs = state['static_kwargs']
-        self._build_module_src = state['build_module_src']
-        self._build_func_name = state['build_func_name']
-        
-        # Parse imported module.
-        module = imp.new_module('_tfutil_network_import_module_%d' % len(_network_import_modules))
-        exec(self._build_module_src, module.__dict__)
-        self._build_func = find_obj_in_module(module, self._build_func_name)
-        _network_import_modules.append(module) # avoid gc
-        
+
         # Init graph.
         self._init_graph()
         self.reset_vars()
@@ -578,9 +546,6 @@ class Network:
         net._init_fields()
         net.name = name if name is not None else self.name
         net.static_kwargs = dict(self.static_kwargs)
-        net._build_module_src = self._build_module_src
-        net._build_func_name = self._build_func_name
-        net._build_func = self._build_func
         net._init_graph()
         net.copy_vars_from(self)
         return net
@@ -616,65 +581,6 @@ class Network:
                         new_value = lerp(src_net.vars[name], var, cur_beta)
                         ops.append(var.assign(new_value))
                 return tf.group(*ops)
-
-    # Run this network for the given NumPy array(s), and return the output(s) as NumPy array(s).
-    def run(self, *in_arrays,
-        return_as_list  = False,    # True = return a list of NumPy arrays, False = return a single NumPy array, or a tuple if there are multiple outputs.
-        print_progress  = False,    # Print progress to the console? Useful for very large input arrays.
-        minibatch_size  = None,     # Maximum minibatch size to use, None = disable batching.
-        num_gpus        = 1,        # Number of GPUs to use.
-        out_mul         = 1.0,      # Multiplicative constant to apply to the output(s).
-        out_add         = 0.0,      # Additive constant to apply to the output(s).
-        out_shrink      = 1,        # Shrink the spatial dimensions of the output(s) by the given factor.
-        out_dtype       = None,     # Convert the output to the specified data type.
-        **dynamic_kwargs):          # Additional keyword arguments to pass into the network construction function.
-
-        assert len(in_arrays) == self.num_inputs
-        num_items = in_arrays[0].shape[0]
-        if minibatch_size is None:
-            minibatch_size = num_items
-        key = str([list(sorted(dynamic_kwargs.items())), num_gpus, out_mul, out_add, out_shrink, out_dtype])
-
-        # Build graph.
-        if key not in self._run_cache:
-            with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
-                in_split = list(zip(*[tf.split(x, num_gpus) for x in self.input_templates]))
-                out_split = []
-                for gpu in range(num_gpus):
-                    with tf.device('/gpu:%d' % gpu):
-                        out_expr = self.get_output_for(*in_split[gpu], return_as_list=True, **dynamic_kwargs)
-                        if out_mul != 1.0:
-                            out_expr = [x * out_mul for x in out_expr]
-                        if out_add != 0.0:
-                            out_expr = [x + out_add for x in out_expr]
-                        if out_shrink > 1:
-                            ksize = [1, 1, out_shrink, out_shrink]
-                            out_expr = [tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding='VALID', data_format='NCHW') for x in out_expr]
-                        if out_dtype is not None:
-                            if tf.as_dtype(out_dtype).is_integer:
-                                out_expr = [tf.round(x) for x in out_expr]
-                            out_expr = [tf.saturate_cast(x, out_dtype) for x in out_expr]
-                        out_split.append(out_expr)
-                self._run_cache[key] = [tf.concat(outputs, axis=0) for outputs in zip(*out_split)]
-
-        # Run minibatches.
-        out_expr = self._run_cache[key]
-        out_arrays = [np.empty([num_items] + shape_to_list(expr.shape)[1:], expr.dtype.name) for expr in out_expr]
-        for mb_begin in range(0, num_items, minibatch_size):
-            if print_progress:
-                print('\r%d / %d' % (mb_begin, num_items), end='')
-            mb_end = min(mb_begin + minibatch_size, num_items)
-            mb_in = [src[mb_begin : mb_end] for src in in_arrays]
-            mb_out = tf.get_default_session().run(out_expr, dict(zip(self.input_templates, mb_in)))
-            for dst, src in zip(out_arrays, mb_out):
-                dst[mb_begin : mb_end] = src
-
-        # Done.
-        if print_progress:
-            print('\r%d / %d' % (num_items, num_items))
-        if not return_as_list:
-            out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
-        return out_arrays
 
     def run_simple(self, latents):
         """
