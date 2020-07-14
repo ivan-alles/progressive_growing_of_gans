@@ -52,24 +52,6 @@ class Network:
     """
     Unpickles a trained network to convert it to TF2. Only generator is supported.
     """
-    def _init_graph(self):
-        self.input_names = ['latents_in', 'labels_in']
-        self.num_inputs = len(self.input_names)
-        assert self.num_inputs >= 1
-
-        self.scope = tf.get_default_graph().unique_name(self.name.replace('/', '_'), mark_as_used=False)
-
-        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-            assert tf.get_variable_scope().name == self.scope
-            self.latent_inputs = tf.keras.Input(name=self.input_names[0], shape=[None])
-            self.label_inputs = tf.keras.Input(name=self.input_names[1], shape=[None])
-            self.output = networks2.G_paper(self.latent_inputs, self.label_inputs, **self.static_kwargs)
-
-        self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
-        self.trainables = OrderedDict(
-            [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
-
-
     # Run initializers for all variables defined by this network.
     def reset_vars(self):
         run([var.initializer for var in self.vars.values()])
@@ -101,8 +83,22 @@ class Network:
         self.name = state['name']
         self.static_kwargs = state['static_kwargs']
 
-        # Init graph.
-        self._init_graph()
+        self.scope = tf.get_default_graph().unique_name(self.name.replace('/', '_'), mark_as_used=False)
+
+        # with tf.device('/GPU:0'):
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+            assert tf.get_variable_scope().name == self.scope
+            self.latent_inputs = tf.keras.Input(name='latents_in', shape=[None])
+            self.label_inputs = tf.keras.Input(name='labels_in', shape=[None])
+            self.output = networks2.G_paper(self.latent_inputs, self.label_inputs, **self.static_kwargs)
+
+        # keras_model = tf.keras.Model(inputs=(self.latent_inputs, self.label_inputs), outputs=self.output)
+        # tf.keras.utils.plot_model(keras_model, to_file='model.svg', dpi=50, show_shapes=True)
+
+        self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
+        self.trainables = OrderedDict(
+            [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
+
         self.reset_vars()
         set_vars({self.find_var(name): value for name, value in state['variables']})
 
