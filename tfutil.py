@@ -676,63 +676,6 @@ class Network:
             out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
         return out_arrays
 
-    def run_simple(self, latents):
-        """
-        A simplified version of run() for the generator model.
-        """
-
-        if not hasattr(self, 'model'):
-            with tf.variable_scope(self.scope, reuse=True):
-                assert tf.get_variable_scope().name == self.scope
-                named_inputs = [tf.identity(expr, name=name) for expr, name in zip(self.input_templates, self.input_names)]
-                self.model = self._build_func(*named_inputs, **self.static_kwargs)
-
-        labels = np.zeros([latents.shape[0]] + self.input_templates[1].shape[1:])
-
-        feed_dict = {
-            self.input_templates[0]: latents,
-            self.input_templates[1]: labels
-        }
-        output = tf.get_default_session().run(self.model, feed_dict)
-        return output
-
-    def run_keras(self, latents):
-        """
-        Creates and runs a tf.keras model.
-        """
-
-        if not hasattr(self, 'model'):
-            with tf.variable_scope(self.scope, reuse=True):
-                assert tf.get_variable_scope().name == self.scope
-                named_inputs = [tf.identity(expr, name=name) for expr, name in zip(self.input_templates, self.input_names)]
-                output = self._build_func(*named_inputs, **self.static_kwargs)
-
-                latent_inputs = tf.keras.Input(shape=self.input_templates[0].shape, name=self.input_names[0])
-                label_inputs = tf.keras.Input(shape=self.input_templates[1].shape, name=self.input_names[1])
-
-                keras_model = tf.keras.Model(inputs=(latent_inputs, label_inputs), outputs=output)
-                tf.keras.utils.plot_model(keras_model, to_file='model.svg', dpi=50, show_shapes=True)
-
-            assert is_tf_expression(output) or isinstance(output, tuple)
-            self.model = output
-
-            #self.model = tf.keras.Model(inputs=tuple(self.input_templates), outputs=output)
-            #tf.keras.utils.plot_model(self.model, to_file='model.svg', dpi=50, show_shapes=True)
-
-
-
-        labels = np.zeros([latents.shape[0]] + self.input_templates[1].shape[1:])
-
-        # output = self.model.predict([latents, labels])
-
-        feed_dict = {
-            self.input_templates[0]: latents,
-            self.input_templates[1]: labels
-        }
-        output = tf.get_default_session().run(self.model, feed_dict)
-        return output
-
-
     # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
     # individual layers of the network. Mainly intended to be used for reporting.
     def list_layers(self):
