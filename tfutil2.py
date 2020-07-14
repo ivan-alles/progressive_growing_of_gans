@@ -48,22 +48,10 @@ def set_vars(var_to_value_dict):
     run(ops, feed_dict)
 
 
-#----------------------------------------------------------------------------
-# Generic network abstraction.
-#
-# Acts as a convenience wrapper for a parameterized network construction
-# function, providing several utility methods and convenient access to
-# the inputs/outputs/weights.
-#
-# Network objects can be safely pickled and unpickled for long-term
-# archival purposes. The pickling works reliably as long as the underlying
-# network construction function is defined in a standalone Python module
-# that has no side effects or application-specific imports.
-
-network_import_handlers = []    # Custom import handlers for dealing with legacy data in pickle import.
-_network_import_modules = []    # Temporary modules create during pickle import.
-
 class Network:
+    """
+    Unpickles a trained network to convert it to TF2. Only generator is supported.
+    """
     def _init_graph(self):
         self.input_names = ['latents_in', 'labels_in']
         self.num_inputs = len(self.input_names)
@@ -107,10 +95,6 @@ class Network:
         if UNPICKLE_COUNTER != 3:
             # Skip unused objects.
             return
-
-        # Execute custom import handlers.
-        for handler in network_import_handlers:
-            state = handler(state)
 
         # Set basic fields.
         assert state['version'] == 2
