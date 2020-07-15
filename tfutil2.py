@@ -85,9 +85,9 @@ class Network:
 
         self.scope = tf.get_default_graph().unique_name(self.name.replace('/', '_'), mark_as_used=False)
 
-        mirrored_strategy = tf.distribute.MirroredStrategy()
+        self.mirrored_strategy = tf.distribute.MirroredStrategy()
 
-        with mirrored_strategy.scope():
+        with self.mirrored_strategy.scope():
             with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
                 assert tf.get_variable_scope().name == self.scope
                 self.latents_in = tf.keras.Input(name='latents_in', shape=[None])

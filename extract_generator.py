@@ -67,4 +67,14 @@ base_name, ext = os.path.splitext(input_file_name)
 
 if hasattr(Gs, 'keras_model'):
     tf.keras.utils.plot_model(Gs.keras_model, to_file=base_name + '.svg', dpi=50, show_shapes=True)
+
+    with open(base_name + '.txt', 'w') as f:
+        Gs.keras_model.summary(print_fn=lambda l: print(l, file=f))
+
+    # with open(base_name + '.json', 'w') as f:
+    #     s = Gs.keras_model.to_json()
+    #     f.write(s)
+
     # Gs.keras_model.save(base_name + '.tf')
+
+    Gs.keras_model.save_weights(base_name + '-weights.tf')
