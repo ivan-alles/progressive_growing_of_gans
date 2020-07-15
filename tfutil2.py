@@ -103,7 +103,6 @@ class Network:
             set_vars({self.find_var(name): value for name, value in state['variables']})
 
             self.keras_model = tf.keras.Model(inputs=(self.latent_inputs, self.label_inputs), outputs=self.output)
-            tf.keras.utils.plot_model(self.keras_model, to_file='model.svg', dpi=50, show_shapes=True)
 
 
     def run(self, latents):

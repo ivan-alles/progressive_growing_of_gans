@@ -2,7 +2,10 @@
     Extract the generator model from the original network.
     This file is based on the import_example.py.
 """
+import os
 import pickle
+import sys
+
 import numpy as np
 import tensorflow as tf
 import PIL.Image
@@ -37,9 +40,9 @@ class MyUnpickler(pickle.Unpickler):
             return tfutil2.Network
         return super().find_class(module, name)
 
+input_file_name = sys.argv[1]
 
-# Import official CelebA-HQ networks.
-with open('karras2018iclr-celebahq-1024x1024.pkl', 'rb') as file:
+with open(input_file_name, 'rb') as file:
     tfutil2.UNPICKLE_COUNTER = 0
     unpickler = MyUnpickler(file)
     G, D, Gs = unpickler.load()
@@ -60,5 +63,8 @@ images = images.transpose(0, 2, 3, 1)  # NCHW => NHWC
 for idx in range(images.shape[0]):
     PIL.Image.fromarray(images[idx], 'RGB').save('img%d.png' % idx)
 
-# if hasattr(Gs, 'keras_model'):
-#     Gs.keras_model.save('model.tf')
+base_name, ext = os.path.splitext(input_file_name)
+
+if hasattr(Gs, 'keras_model'):
+    tf.keras.utils.plot_model(Gs.keras_model, to_file=base_name + '.svg', dpi=50, show_shapes=True)
+    # Gs.keras_model.save(base_name + '.tf')
