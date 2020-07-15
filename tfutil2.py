@@ -90,9 +90,9 @@ class Network:
         with mirrored_strategy.scope():
             with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
                 assert tf.get_variable_scope().name == self.scope
-                self.latent_inputs = tf.keras.Input(name='latents_in', shape=[None])
-                self.label_inputs = tf.keras.Input(name='labels_in', shape=[None])
-                self.output = networks2.G_paper(self.latent_inputs, self.label_inputs, **self.static_kwargs)
+                self.latents_in = tf.keras.Input(name='latents_in', shape=[None])
+                self.label_in = tf.keras.Input(name='labels_in', shape=[None])
+                self.output = networks2.G_paper(self.latents_in, self.label_in, **self.static_kwargs)
 
 
             self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
@@ -102,17 +102,17 @@ class Network:
             self.reset_vars()
             set_vars({self.find_var(name): value for name, value in state['variables']})
 
-            self.keras_model = tf.keras.Model(inputs=(self.latent_inputs, self.label_inputs), outputs=self.output)
+            self.keras_model = tf.keras.Model(inputs=(self.latents_in, self.label_in), outputs=self.output)
 
 
     def run(self, latents):
         """
         Generate images.
         """
-        labels = np.zeros([len(latents)] + self.label_inputs.shape[1:])
+        labels = np.zeros([len(latents)] + self.label_in.shape[1:])
         feed_dict = {
-            self.latent_inputs: latents,
-            self.label_inputs: labels
+            self.latents_in: latents,
+            self.label_in: labels
         }
         result = tf.get_default_session().run(self.output, feed_dict)
         return result
@@ -121,7 +121,7 @@ class Network:
         """
         Generate images using keras.
         """
-        labels = np.zeros([len(latents)] + self.label_inputs.shape[1:])
+        labels = np.zeros([len(latents)] + self.label_in.shape[1:])
         result = self.keras_model.predict([latents, labels])
         return result
 

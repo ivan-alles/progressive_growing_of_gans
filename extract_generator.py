@@ -48,7 +48,7 @@ with open(input_file_name, 'rb') as file:
     G, D, Gs = unpickler.load()
 
 # Generate latent vectors.
-latents = np.random.RandomState(1000).randn(1000, *Gs.latent_inputs.shape[1:])  # 1000 random latents
+latents = np.random.RandomState(1000).randn(1000, *Gs.latents_in.shape[1:])  # 1000 random latents
 latents = latents[[477, 56, 83, 887, 583, 391, 86, 340, 341, 415]]  # hand-picked top-10
 
 # Run the generator to produce a set of images.
