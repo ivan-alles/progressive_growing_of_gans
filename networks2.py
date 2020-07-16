@@ -61,14 +61,6 @@ def apply_bias(x):
         return x + tf.reshape(b, [1, -1, 1, 1])
 
 #----------------------------------------------------------------------------
-# Leaky ReLU activation. Same as tf.nn.leaky_relu, but supports FP16.
-
-def leaky_relu(x, alpha=0.2):
-    with tf.name_scope('LeakyRelu'):
-        alpha = tf.constant(alpha, dtype=x.dtype, name='alpha')
-        return tf.maximum(x * alpha, x)
-
-#----------------------------------------------------------------------------
 # Nearest-neighbor upscaling layer.
 
 def upscale2d(x, factor=2):
@@ -121,7 +113,7 @@ def G_paper(
         return min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
     if latent_size is None:
         latent_size = nf(0)
-    act = leaky_relu
+    act = tf.nn.leaky_relu
     
     latents_in.set_shape([None, latent_size])
     labels_in.set_shape([None, label_size])
