@@ -80,25 +80,42 @@ class Network:
         self.name = state['name']
         self.static_kwargs = state['static_kwargs']
 
-        self.scope = tf.get_default_graph().unique_name(self.name.replace('/', '_'), mark_as_used=False)
+        # self.scope = tf.get_default_graph().unique_name(self.name.replace('/', '_'), mark_as_used=False)
 
-        self.mirrored_strategy = tf.distribute.MirroredStrategy()
+        # self.mirrored_strategy = tf.distribute.MirroredStrategy()
 
-        variables = dict(state['variables'])
-
-        with self.mirrored_strategy.scope():
-            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-                assert tf.get_variable_scope().name == self.scope
-                self.latents_in = tf.keras.Input(name='latents_in', shape=[None])
-                self.label_in = tf.keras.Input(name='labels_in', shape=[None])
-                self.output = networks2.G_paper(self.latents_in, self.label_in, **self.static_kwargs)
+        # with self.mirrored_strategy.scope():
+        # with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+        #     assert tf.get_variable_scope().name == self.scope
+        self.latents_in = tf.keras.Input(name='latents_in', shape=[512])
+        self.label_in = tf.keras.Input(name='labels_in', shape=[None])
+        self.output = networks2.G_paper(self.latents_in, self.label_in, **self.static_kwargs)
 
 
-            self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
+        # @tf.function
+        # def output_func(latents_in, label_in):
+        #     return networks2.G_paper(latents_in, label_in, **self.static_kwargs)
+        # self.output = output_func(self.latents_in, self.label_in)
 
-            set_vars({self.find_var(name): value for name, value in state['variables']})
+        #self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
+        # set_vars({self.find_var(name): value for name, value in state['variables']})
 
-            self.keras_model = tf.keras.Model(inputs=(self.latents_in, self.label_in), outputs=self.output)
+        variable_values = dict(state['variables'])
+
+        operations = []
+        for variable in tf.global_variables():
+            if variable.name[-4] == '_':
+                key = variable.name[:-4]
+            else:
+                key = variable.name[:-2]
+            print(variable.name, key)
+            value = variable_values[key]
+            operations.append(variable.assign(value))
+
+        tf.get_default_session().run(operations)
+
+
+        # self.keras_model = tf.keras.Model(inputs=(self.latents_in, self.label_in), outputs=self.output)
 
 
     def run(self, latents):

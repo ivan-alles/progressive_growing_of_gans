@@ -22,13 +22,12 @@ def cset(cur_lambda, new_cond, new_lambda):
 # Get/create weight tensor for a convolutional or fully-connected layer.
 
 def get_weight(shape, gain=np.sqrt(2), use_wscale=False, fan_in=None):
-    if fan_in is None: fan_in = np.prod(shape[:-1])
-    std = gain / np.sqrt(fan_in) # He init
-    if use_wscale:
-        wscale = tf.constant(np.float32(std), name='wscale')
-        return tf.get_variable('weight', shape=shape, initializer=tf.initializers.random_normal()) * wscale
-    else:
-        return tf.get_variable('weight', shape=shape, initializer=tf.initializers.random_normal(0, std))
+    # if not tf.get_variable_scope().name.startswith('G_paper'):
+    #     print(tf.get_variable_scope().name)
+    variable = tf.Variable(np.zeros(shape, dtype=np.float32), name='weight')
+    print(tf.get_variable_scope().name, variable.name)
+    return variable
+
 
 #----------------------------------------------------------------------------
 # Fully-connected layer.
@@ -53,7 +52,8 @@ def conv2d(x, fmaps, kernel, gain=np.sqrt(2), use_wscale=False):
 # Apply bias to the given activation tensor.
 
 def apply_bias(x):
-    b = tf.get_variable('bias', shape=[x.shape[1]], initializer=tf.initializers.zeros())
+    # b = tf.get_variable('bias', shape=[x.shape[1]], initializer=tf.initializers.zeros())
+    b = tf.Variable(np.zeros(x.shape[1:2], dtype=np.float32), name='bias')
     b = tf.cast(b, x.dtype)
     if len(x.shape) == 2:
         return x + b
@@ -76,7 +76,7 @@ def upscale2d(x, factor=2):
 #----------------------------------------------------------------------------
 # Pixelwise feature vector normalization.
 
-@tf.function
+
 def pixel_norm(x):
     return x * tf.rsqrt(tf.reduce_mean(tf.square(x), axis=1, keepdims=True) + 1e-8)
 
@@ -118,13 +118,14 @@ def G_paper(
     latents_in.set_shape([None, latent_size])
     labels_in.set_shape([None, label_size])
     combo_in = tf.cast(tf.concat([latents_in, labels_in], axis=1), dtype)
-    lod_in = tf.cast(tf.get_variable('lod', initializer=np.float32(0.0), trainable=False), dtype)
+    lod_in = tf.cast(tf.Variable(0, name='lod'), dtype)
 
     # Building blocks.
     def block(x, res): # res = 2..resolution_log2
         with tf.variable_scope('%dx%d' % (2**res, 2**res)):
             if res == 2: # 4x4
-                if normalize_latents: x = pixel_norm(x)
+                if normalize_latents:
+                    x = pixel_norm(x)
                 with tf.variable_scope('Dense'):
                     x = dense(x, fmaps=nf(res-1)*16, gain=np.sqrt(2)/4, use_wscale=use_wscale) # override gain to match the original Theano implementation
                     x = tf.reshape(x, [-1, nf(res-1), 4, 4])
