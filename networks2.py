@@ -59,13 +59,13 @@ def apply_bias(x):
 
 def upscale2d(x, factor=2):
     assert isinstance(factor, int) and factor >= 1
-    if factor == 1: return x
-    with tf.compat.v1.variable_scope('Upscale2D'):
-        s = x.shape
-        x = tf.reshape(x, [-1, s[1], s[2], 1, s[3], 1])
-        x = tf.tile(x, [1, 1, 1, factor, 1, factor])
-        x = tf.reshape(x, [-1, s[1], s[2] * factor, s[3] * factor])
+    if factor == 1:
         return x
+    s = x.shape
+    x = tf.reshape(x, [-1, s[1], s[2], 1, s[3], 1])
+    x = tf.tile(x, [1, 1, 1, factor, 1, factor])
+    x = tf.reshape(x, [-1, s[1], s[2] * factor, s[3] * factor])
+    return x
 
 class PixelNormLayer(tf.keras.layers.Layer):
     """
@@ -112,8 +112,8 @@ def G_paper(
     
     # Building blocks.
     def block(x, res): # res = 2..resolution_log2
-        with tf.compat.v1.variable_scope('%dx%d' % (2**res, 2**res)):
-            if res == 2: # 4x4
+        with tf.compat.v1.variable_scope(f'{2**res}x{2**res}'):
+            if res == 2:  # 4x4
                 x = PixelNormLayer()(x)
                 with tf.compat.v1.variable_scope('Dense'):
                     x = dense(x, fmaps=nf(res-1)*16, gain=np.sqrt(2)/4, use_wscale=use_wscale) # override gain to match the original Theano implementation
@@ -130,7 +130,7 @@ def G_paper(
             return x
     def torgb(x, res): # res = 2..resolution_log2
         lod = resolution_log2 - res
-        with tf.compat.v1.variable_scope('ToRGB_lod%d' % lod):
+        with tf.compat.v1.variable_scope(f'ToRGB_lod{lod}'):
             return apply_bias(conv2d(x, fmaps=num_channels, kernel=1, gain=1, use_wscale=use_wscale))
 
     # Recursive structure: complex but efficient.
