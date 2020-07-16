@@ -70,12 +70,12 @@ def upscale2d(x, factor=2):
         x = tf.reshape(x, [-1, s[1], s[2] * factor, s[3] * factor])
         return x
 
-#----------------------------------------------------------------------------
-# Pixelwise feature vector normalization.
-
-@tf.function
-def pixel_norm(x):
-    return x / tf.sqrt(tf.reduce_mean(tf.square(x), axis=1, keepdims=True) + 1e-8)
+class PixelNormLayer(tf.keras.layers.Layer):
+    """
+    Pixelwise feature vector normalization.
+    """
+    def call(self, x):
+        return x / tf.sqrt(tf.reduce_mean(tf.square(x), axis=1, keepdims=True) + 1e-8)
 
 #----------------------------------------------------------------------------
 # Generator network used in the paper.
@@ -87,7 +87,6 @@ def G_paper(
     fmap_base           = 8192,         # Overall multiplier for the number of feature maps.
     fmap_decay          = 1.0,          # log2 feature map reduction when doubling the resolution.
     fmap_max            = 512,          # Maximum number of feature maps in any layer.
-    normalize_latents   = True,         # Normalize latent vectors before feeding them to the network?
     use_wscale          = True,         # Enable equalized learning rate?
     **kwargs                            # Used to check a possibly pickled unsupported in TF2 version values.
 ):
@@ -102,6 +101,7 @@ def G_paper(
     check_arg('label_size', 0)
     check_arg('latent_size', None)
     check_arg('dtype', 'float32')
+    check_arg('normalize_latents', True)
 
     resolution_log2 = int(np.log2(resolution))
     assert resolution == 2**resolution_log2 and resolution >= 4
@@ -115,19 +115,19 @@ def G_paper(
     def block(x, res): # res = 2..resolution_log2
         with tf.compat.v1.variable_scope('%dx%d' % (2**res, 2**res)):
             if res == 2: # 4x4
-                if normalize_latents: x = pixel_norm(x)
+                x = PixelNormLayer()(x)
                 with tf.compat.v1.variable_scope('Dense'):
                     x = dense(x, fmaps=nf(res-1)*16, gain=np.sqrt(2)/4, use_wscale=use_wscale) # override gain to match the original Theano implementation
                     x = tf.reshape(x, [-1, nf(res-1), 4, 4])
-                    x = pixel_norm(act(apply_bias(x)))
+                    x = PixelNormLayer()(act(apply_bias(x)))
                 with tf.compat.v1.variable_scope('Conv'):
-                    x = pixel_norm(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
+                    x = PixelNormLayer()(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
             else: # 8x8 and up
                 x = upscale2d(x)
                 with tf.compat.v1.variable_scope('Conv0'):
-                    x = pixel_norm(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
+                    x = PixelNormLayer()(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
                 with tf.compat.v1.variable_scope('Conv1'):
-                    x = pixel_norm(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
+                    x = PixelNormLayer()(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
             return x
     def torgb(x, res): # res = 2..resolution_log2
         lod = resolution_log2 - res
