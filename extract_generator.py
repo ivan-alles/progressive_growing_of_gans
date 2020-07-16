@@ -12,9 +12,6 @@ import PIL.Image
 
 import tfutil2
 
-tf.compat.v1.disable_eager_execution()
-tf.compat.v1.InteractiveSession()
-
 class MyUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
         if module == 'tfutil' and name == 'Network':
@@ -33,8 +30,7 @@ latents = np.random.RandomState(1000).randn(1000, *Gs.latents_in.shape[1:])  # 1
 latents = latents[[477, 56, 83, 887, 583, 391, 86, 340, 341, 415]]  # hand-picked top-10
 
 # Run the generator to produce a set of images.
-# images = Gs.run(latents)
-images = Gs.run_keras(latents)
+images = Gs.keras_model.predict(latents)
 
 # Convert images to PIL-compatible format.
 images = np.clip(np.rint((images + 1.0) / 2.0 * 255.0), 0.0, 255.0).astype(np.uint8)  # [-1,1] => [0,255]
@@ -49,6 +45,8 @@ base_name, ext = os.path.splitext(input_file_name)
 if hasattr(Gs, 'keras_model'):
     tf.keras.utils.plot_model(Gs.keras_model, to_file=base_name + '.svg', dpi=50, show_shapes=True)
 
+    # Gs.keras_model.save(base_name + '.tf')
+
     with open(base_name + '.txt', 'w') as f:
         Gs.keras_model.summary(print_fn=lambda l: print(l, file=f))
 
@@ -56,6 +54,5 @@ if hasattr(Gs, 'keras_model'):
     #     s = Gs.keras_model.to_json()
     #     f.write(s)
 
-    # Gs.keras_model.save(base_name + '.tf')
 
-    Gs.keras_model.save_weights(base_name + '-weights.tf')
+    # Gs.keras_model.save_weights(base_name + '-weights.tf')

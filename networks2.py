@@ -8,7 +8,7 @@
 import numpy as np
 import tensorflow as tf
 
-# NOTE: Do not import any application-specific modules here!
+VARIABLES = None
 
 #----------------------------------------------------------------------------
 
@@ -19,7 +19,7 @@ def lerp(a, b, t):
 # Get/create weight tensor for a convolutional or fully-connected layer.
 
 def get_weight(shape, gain=np.sqrt(2), use_wscale=False, fan_in=None):
-    weight = tf.Variable(np.zeros(shape, dtype=np.float32), name='weight')
+    weight = tf.Variable(VARIABLES.get(tf.compat.v1.get_variable_scope().name + '/weight'), name='weight')
     if use_wscale:
         if fan_in is None:
             fan_in = np.prod(shape[:-1])
@@ -48,7 +48,7 @@ def conv2d(x, fmaps, kernel, gain=np.sqrt(2), use_wscale=False):
 # Apply bias to the given activation tensor.
 
 def apply_bias(x):
-    b = tf.Variable(np.zeros(x.shape[1:2], dtype=np.float32), name='bias')
+    b = tf.Variable(VARIABLES.get(tf.compat.v1.get_variable_scope().name + '/bias'), name='bias')
     if len(x.shape) == 2:
         return x + b
     else:
@@ -79,6 +79,7 @@ class PixelNormLayer(tf.keras.layers.Layer):
 
 def G_paper(
     latents_in,                         # First input: Latent vectors [minibatch, latent_size].
+    variables,                          # Unpickled variables
     num_channels        = 1,            # Number of output color channels. Overridden based on dataset.
     resolution          = 32,           # Output resolution. Overridden based on dataset.
     fmap_base           = 8192,         # Overall multiplier for the number of feature maps.
@@ -99,6 +100,9 @@ def G_paper(
     check_arg('latent_size', None)
     check_arg('dtype', 'float32')
     check_arg('normalize_latents', True)
+
+    global VARIABLES
+    VARIABLES = variables
 
     resolution_log2 = int(np.log2(resolution))
     assert resolution == 2**resolution_log2 and resolution >= 4
@@ -137,7 +141,6 @@ def G_paper(
         else:
             img = upscale2d(torgb(y, res), 2 ** lod)
         return img
+
     images_out = grow(latents_in, 2, resolution_log2 - 2)
-        
-    images_out = tf.identity(images_out, name='images_out')
     return images_out

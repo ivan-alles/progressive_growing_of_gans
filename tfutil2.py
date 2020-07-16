@@ -16,6 +16,15 @@ import networks2
 # Use it to skip unpickling unnecessary objects.
 UNPICKLE_COUNTER = 0
 
+# TODO(ia): rework this, can be just a dictionary.
+class UnpickledVariables:
+    def __init__(self, variables):
+        self._variables = dict(variables)
+
+    def get(self, name):
+        # TODO(ia): some variables are created with the same value. How to avoid duplicates?
+        return self._variables[name]
+
 class Network:
     """
     Unpickles a trained network to convert it to TF2. Only generator is supported.
@@ -34,44 +43,9 @@ class Network:
         # Set basic fields.
         assert state['version'] == 2
 
-        self.mirrored_strategy = tf.distribute.MirroredStrategy()
+        variables = UnpickledVariables(state['variables'])
 
-        with self.mirrored_strategy.scope(), tf.compat.v1.variable_scope('', reuse=tf.compat.v1.AUTO_REUSE):
-            self.latents_in = tf.keras.Input(name='latents_in', shape=[512])
-            self.output = networks2.G_paper(self.latents_in, **state['static_kwargs'])
-
-            variable_values = dict(state['variables'])
-            operations = []
-            for variable in tf.compat.v1.global_variables():
-                key = variable.name[:-2]  # Remove :0
-
-                # This will assign the duplicated variables the same weights.
-                # TODO(ia): shall we remove duplicates? How much memory do they need?
-                if re.match('.*_[0-9]', key):
-                    key = key[:-2]
-                #print(variable.name, key)
-                value = variable_values[key]
-                operations.append(variable.assign(value))
-
-            tf.compat.v1.get_default_session().run(operations)
-
-            self.keras_model = tf.keras.Model(inputs=self.latents_in, outputs=self.output)
-
-
-    def run(self, latents):
-        """
-        Generate images.
-        """
-        feed_dict = {
-            self.latents_in: latents
-        }
-        result = tf.compat.v1.get_default_session().run(self.output, feed_dict)
-        return result
-
-    def run_keras(self, latents):
-        """
-        Generate images using keras.
-        """
-        result = self.keras_model.predict(latents)
-        return result
+        self.latents_in = tf.keras.Input(name='latents_in', shape=[512])
+        output = networks2.G_paper(self.latents_in, variables, **state['static_kwargs'])
+        self.keras_model = tf.keras.Model(inputs=self.latents_in, outputs=output)
 
