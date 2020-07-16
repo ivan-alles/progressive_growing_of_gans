@@ -93,8 +93,6 @@ class Network:
 
 
             self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
-            self.trainables = OrderedDict(
-                [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
 
             set_vars({self.find_var(name): value for name, value in state['variables']})
 
