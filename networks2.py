@@ -84,11 +84,9 @@ def upscale2d(x, factor=2):
 #----------------------------------------------------------------------------
 # Pixelwise feature vector normalization.
 
-def pixel_norm(x, epsilon=1e-8):
-    with tf.variable_scope('PixelNorm'):
-        return x * tf.rsqrt(tf.reduce_mean(tf.square(x), axis=1, keepdims=True) + epsilon)
-
-
+@tf.function
+def pixel_norm(x):
+    return x * tf.rsqrt(tf.reduce_mean(tf.square(x), axis=1, keepdims=True) + 1e-8)
 
 #----------------------------------------------------------------------------
 # Generator network used in the paper.
