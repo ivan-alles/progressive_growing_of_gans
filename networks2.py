@@ -15,9 +15,6 @@ import tensorflow as tf
 def lerp(a, b, t):
     return a + (b - a) * t
 
-def cset(cur_lambda, new_cond, new_lambda):
-    return lambda: tf.cond(new_cond, new_lambda, cur_lambda)
-
 #----------------------------------------------------------------------------
 # Get/create weight tensor for a convolutional or fully-connected layer.
 
@@ -109,8 +106,6 @@ def G_paper(
         return min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
     act = tf.nn.leaky_relu
     
-    lod_in = tf.Variable(0.0, name='lod')
-
     # Building blocks.
     def block(x, res): # res = 2..resolution_log2
         with tf.compat.v1.variable_scope('%dx%d' % (2**res, 2**res)):
@@ -137,10 +132,11 @@ def G_paper(
     # Recursive structure: complex but efficient.
     def grow(x, res, lod):
         y = block(x, res)
-        img = lambda: upscale2d(torgb(y, res), 2**lod)
-        if res > 2: img = cset(img, (lod_in > lod), lambda: upscale2d(lerp(torgb(y, res), upscale2d(torgb(x, res - 1)), lod_in - lod), 2**lod))
-        if lod > 0: img = cset(img, (lod_in < lod), lambda: grow(y, res + 1, lod - 1))
-        return img()
+        if lod > 0:
+            img = grow(y, res + 1, lod - 1)
+        else:
+            img = upscale2d(torgb(y, res), 2 ** lod)
+        return img
     images_out = grow(latents_in, 2, resolution_log2 - 2)
         
     images_out = tf.identity(images_out, name='images_out')
