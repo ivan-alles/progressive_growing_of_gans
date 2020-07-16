@@ -22,10 +22,11 @@ def cset(cur_lambda, new_cond, new_lambda):
 # Get/create weight tensor for a convolutional or fully-connected layer.
 
 def get_weight(shape, gain=np.sqrt(2), use_wscale=False, fan_in=None):
-    if fan_in is None: fan_in = np.prod(shape[:-1])
-    std = gain / np.sqrt(fan_in) # He init
     weight = tf.Variable(np.zeros(shape, dtype=np.float32), name='weight')
     if use_wscale:
+        if fan_in is None:
+            fan_in = np.prod(shape[:-1])
+        std = gain / np.sqrt(fan_in)  # He init
         weight = weight * std
     return weight
 
