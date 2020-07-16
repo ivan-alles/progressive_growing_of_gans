@@ -85,14 +85,11 @@ def pixel_norm(x):
 
 def G_paper(
     latents_in,                         # First input: Latent vectors [minibatch, latent_size].
-    labels_in,                          # Second input: Labels [minibatch, label_size].
     num_channels        = 1,            # Number of output color channels. Overridden based on dataset.
     resolution          = 32,           # Output resolution. Overridden based on dataset.
-    label_size          = 0,            # Dimensionality of the labels, 0 if no labels. Overridden based on dataset.
     fmap_base           = 8192,         # Overall multiplier for the number of feature maps.
     fmap_decay          = 1.0,          # log2 feature map reduction when doubling the resolution.
     fmap_max            = 512,          # Maximum number of feature maps in any layer.
-    latent_size         = None,         # Dimensionality of the latent vectors. None = min(fmap_base, fmap_max).
     normalize_latents   = True,         # Normalize latent vectors before feeding them to the network?
     use_wscale          = True,         # Enable equalized learning rate?
     dtype               = 'float32',    # Data type to use for activations and outputs.
@@ -106,18 +103,16 @@ def G_paper(
     check_arg('use_leakyrelu', True)
     check_arg('use_pixelnorm', True)
     check_arg('pixelnorm_epsilon', 1e-8)
+    check_arg('label_size', 0)
+    check_arg('latent_size', None)
+
 
     resolution_log2 = int(np.log2(resolution))
     assert resolution == 2**resolution_log2 and resolution >= 4
     def nf(stage):
         return min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
-    if latent_size is None:
-        latent_size = nf(0)
     act = tf.nn.leaky_relu
     
-    latents_in.set_shape([None, latent_size])
-    labels_in.set_shape([None, label_size])
-    combo_in = tf.cast(tf.concat([latents_in, labels_in], axis=1), dtype)
     lod_in = tf.cast(tf.get_variable('lod', initializer=np.float32(0.0), trainable=False), dtype)
 
     # Building blocks.
@@ -150,7 +145,7 @@ def G_paper(
         if res > 2: img = cset(img, (lod_in > lod), lambda: upscale2d(lerp(torgb(y, res), upscale2d(torgb(x, res - 1)), lod_in - lod), 2**lod))
         if lod > 0: img = cset(img, (lod_in < lod), lambda: grow(y, res + 1, lod - 1))
         return img()
-    images_out = grow(combo_in, 2, resolution_log2 - 2)
+    images_out = grow(latents_in, 2, resolution_log2 - 2)
         
     assert images_out.dtype == tf.as_dtype(dtype)
     images_out = tf.identity(images_out, name='images_out')

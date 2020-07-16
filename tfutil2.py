@@ -7,8 +7,9 @@
 
 """ A port of the tfutil.py to make the generator work with TensorFlow 2. """
 
+import re
+
 import numpy as np
-from collections import OrderedDict
 import tensorflow as tf
 import networks2
 
@@ -38,8 +39,7 @@ class Network:
 
         with tf.variable_scope('', reuse=tf.AUTO_REUSE):
             self.latents_in = tf.keras.Input(name='latents_in', shape=[512])
-            self.label_in = tf.keras.Input(name='labels_in', shape=[None])
-            self.output = networks2.G_paper(self.latents_in, self.label_in, **state['static_kwargs'])
+            self.output = networks2.G_paper(self.latents_in, **state['static_kwargs'])
 
 
         # @tf.function
@@ -54,10 +54,9 @@ class Network:
 
         operations = []
         for variable in tf.global_variables():
-            if variable.name[-4] == '_':
-                key = variable.name[:-4]
-            else:
-                key = variable.name[:-2]
+            key = variable.name[:-2]  # Remove :0
+            if re.match('.*_[0-9]', key):  # Remove duplicates like _1
+                key = key[:-2]
             print(variable.name, key)
             value = variable_values[key]
             operations.append(variable.assign(value))
@@ -72,10 +71,8 @@ class Network:
         """
         Generate images.
         """
-        labels = np.zeros([len(latents)] + self.label_in.shape[1:])
         feed_dict = {
-            self.latents_in: latents,
-            self.label_in: labels
+            self.latents_in: latents
         }
         result = tf.get_default_session().run(self.output, feed_dict)
         return result
@@ -84,7 +81,6 @@ class Network:
         """
         Generate images using keras.
         """
-        labels = np.zeros([len(latents)] + self.label_in.shape[1:])
-        result = self.keras_model.predict([latents, labels])
+        result = self.keras_model.predict(latents)
         return result
 
