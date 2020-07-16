@@ -88,6 +88,8 @@ def pixel_norm(x, epsilon=1e-8):
     with tf.variable_scope('PixelNorm'):
         return x * tf.rsqrt(tf.reduce_mean(tf.square(x), axis=1, keepdims=True) + epsilon)
 
+
+
 #----------------------------------------------------------------------------
 # Generator network used in the paper.
 
@@ -105,16 +107,22 @@ def G_paper(
     use_wscale          = True,         # Enable equalized learning rate?
     use_pixelnorm       = True,         # Enable pixelwise feature vector normalization?
     pixelnorm_epsilon   = 1e-8,         # Constant epsilon for pixelwise feature vector normalization.
-    use_leakyrelu       = True,         # True = leaky ReLU, False = ReLU.
     dtype               = 'float32',    # Data type to use for activations and outputs.
-    **kwargs):                          # Ignore unrecognized keyword args.
-    
+    **kwargs # Use to check a possibly pickled unsupported in TF2 version values.
+):
+    def check_arg(name, expected_value):
+        if name in kwargs and kwargs[name] != expected_value:
+            raise ValueError('TF2 version does not support this value')
+
+    check_arg('fused_scale', False)
+    check_arg('use_leakyrelu', True)
+
     resolution_log2 = int(np.log2(resolution))
     assert resolution == 2**resolution_log2 and resolution >= 4
     def nf(stage): return min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
     def PN(x): return pixel_norm(x, epsilon=pixelnorm_epsilon) if use_pixelnorm else x
     if latent_size is None: latent_size = nf(0)
-    act = leaky_relu if use_leakyrelu else tf.nn.relu
+    act = leaky_relu
     
     latents_in.set_shape([None, latent_size])
     labels_in.set_shape([None, label_size])
