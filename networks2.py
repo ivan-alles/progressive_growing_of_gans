@@ -36,7 +36,6 @@ def dense(x, fmaps, gain=np.sqrt(2), use_wscale=False):
     if len(x.shape) > 2:
         x = tf.reshape(x, [-1, np.prod([d for d in x.shape[1:]])])
     w = get_weight([x.shape[1], fmaps], gain=gain, use_wscale=use_wscale)
-    w = tf.cast(w, x.dtype)
     return tf.matmul(x, w)
 
 #----------------------------------------------------------------------------
@@ -45,7 +44,6 @@ def dense(x, fmaps, gain=np.sqrt(2), use_wscale=False):
 def conv2d(x, fmaps, kernel, gain=np.sqrt(2), use_wscale=False):
     assert kernel >= 1 and kernel % 2 == 1
     w = get_weight([kernel, kernel, x.shape[1], fmaps], gain=gain, use_wscale=use_wscale)
-    w = tf.cast(w, x.dtype)
     return tf.nn.conv2d(x, w, strides=[1,1,1,1], padding='SAME', data_format='NCHW')
 
 #----------------------------------------------------------------------------
@@ -53,7 +51,6 @@ def conv2d(x, fmaps, kernel, gain=np.sqrt(2), use_wscale=False):
 
 def apply_bias(x):
     b = tf.Variable(np.zeros(x.shape[1:2], dtype=np.float32), name='bias')
-    b = tf.cast(b, x.dtype)
     if len(x.shape) == 2:
         return x + b
     else:
@@ -91,8 +88,7 @@ def G_paper(
     fmap_max            = 512,          # Maximum number of feature maps in any layer.
     normalize_latents   = True,         # Normalize latent vectors before feeding them to the network?
     use_wscale          = True,         # Enable equalized learning rate?
-    dtype               = 'float32',    # Data type to use for activations and outputs.
-    **kwargs # Use to check a possibly pickled unsupported in TF2 version values.
+    **kwargs                            # Used to check a possibly pickled unsupported in TF2 version values.
 ):
     def check_arg(name, expected_value):
         if name in kwargs and kwargs[name] != expected_value:
@@ -104,7 +100,7 @@ def G_paper(
     check_arg('pixelnorm_epsilon', 1e-8)
     check_arg('label_size', 0)
     check_arg('latent_size', None)
-
+    check_arg('dtype', 'float32')
 
     resolution_log2 = int(np.log2(resolution))
     assert resolution == 2**resolution_log2 and resolution >= 4
@@ -112,7 +108,7 @@ def G_paper(
         return min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
     act = tf.nn.leaky_relu
     
-    lod_in = tf.cast(tf.Variable(0, name='lod'), dtype)
+    lod_in = tf.Variable(0.0, name='lod')
 
     # Building blocks.
     def block(x, res): # res = 2..resolution_log2
@@ -146,6 +142,5 @@ def G_paper(
         return img()
     images_out = grow(latents_in, 2, resolution_log2 - 2)
         
-    assert images_out.dtype == tf.as_dtype(dtype)
     images_out = tf.identity(images_out, name='images_out')
     return images_out
