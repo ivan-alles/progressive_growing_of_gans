@@ -44,9 +44,12 @@ class Network:
             operations = []
             for variable in tf.compat.v1.global_variables():
                 key = variable.name[:-2]  # Remove :0
-                if re.match('.*_[0-9]', key):  # Remove duplicates like _1
+
+                # This will assign the duplicated variables the same weights.
+                # TODO(ia): shall we remove duplicates? How much memory do they need?
+                if re.match('.*_[0-9]', key):
                     key = key[:-2]
-                print(variable.name, key)
+                #print(variable.name, key)
                 value = variable_values[key]
                 operations.append(variable.assign(value))
 
