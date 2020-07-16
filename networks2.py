@@ -24,11 +24,10 @@ def cset(cur_lambda, new_cond, new_lambda):
 def get_weight(shape, gain=np.sqrt(2), use_wscale=False, fan_in=None):
     if fan_in is None: fan_in = np.prod(shape[:-1])
     std = gain / np.sqrt(fan_in) # He init
+    weight = tf.Variable(np.zeros(shape, dtype=np.float32), name='weight')
     if use_wscale:
-        wscale = tf.constant(np.float32(std), name='wscale')
-        return tf.get_variable('weight', shape=shape, initializer=tf.initializers.random_normal()) * wscale
-    else:
-        return tf.get_variable('weight', shape=shape, initializer=tf.initializers.random_normal(0, std))
+        weight = weight * std
+    return weight
 
 #----------------------------------------------------------------------------
 # Fully-connected layer.
@@ -53,7 +52,7 @@ def conv2d(x, fmaps, kernel, gain=np.sqrt(2), use_wscale=False):
 # Apply bias to the given activation tensor.
 
 def apply_bias(x):
-    b = tf.get_variable('bias', shape=[x.shape[1]], initializer=tf.initializers.zeros())
+    b = tf.Variable(np.zeros(x.shape[1:2], dtype=np.float32), name='bias')
     b = tf.cast(b, x.dtype)
     if len(x.shape) == 2:
         return x + b
@@ -113,7 +112,7 @@ def G_paper(
         return min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
     act = tf.nn.leaky_relu
     
-    lod_in = tf.cast(tf.get_variable('lod', initializer=np.float32(0.0), trainable=False), dtype)
+    lod_in = tf.cast(tf.Variable(0, name='lod'), dtype)
 
     # Building blocks.
     def block(x, res): # res = 2..resolution_log2
