@@ -41,17 +41,7 @@ class Network:
             self.latents_in = tf.keras.Input(name='latents_in', shape=[512])
             self.output = networks2.G_paper(self.latents_in, **state['static_kwargs'])
 
-
-        # @tf.function
-        # def output_func(latents_in, label_in):
-        #     return networks2.G_paper(latents_in, label_in, **self.static_kwargs)
-        # self.output = output_func(self.latents_in, self.label_in)
-
-        #self.vars = OrderedDict([(self.get_var_localname(var), var) for var in tf.global_variables(self.scope + '/')])
-        # set_vars({self.find_var(name): value for name, value in state['variables']})
-
         variable_values = dict(state['variables'])
-
         operations = []
         for variable in tf.compat.v1.global_variables():
             key = variable.name[:-2]  # Remove :0
