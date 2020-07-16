@@ -18,8 +18,8 @@ def lerp(a, b, t):
 #----------------------------------------------------------------------------
 # Get/create weight tensor for a convolutional or fully-connected layer.
 
-def get_weight(shape, gain=np.sqrt(2), use_wscale=False, fan_in=None):
-    weight = tf.Variable(VARIABLES.get(tf.compat.v1.get_variable_scope().name + '/weight'), name='weight')
+def get_weight(name_prefix, shape, gain=np.sqrt(2), use_wscale=False, fan_in=None):
+    weight = tf.Variable(VARIABLES.get(name_prefix + '/weight'), name='weight')
     if use_wscale:
         if fan_in is None:
             fan_in = np.prod(shape[:-1])
@@ -30,25 +30,25 @@ def get_weight(shape, gain=np.sqrt(2), use_wscale=False, fan_in=None):
 #----------------------------------------------------------------------------
 # Fully-connected layer.
 
-def dense(x, fmaps, gain=np.sqrt(2), use_wscale=False):
+def dense(x, name_prefix, fmaps, gain=np.sqrt(2), use_wscale=False):
     if len(x.shape) > 2:
         x = tf.reshape(x, [-1, np.prod([d for d in x.shape[1:]])])
-    w = get_weight([x.shape[1], fmaps], gain=gain, use_wscale=use_wscale)
+    w = get_weight(name_prefix, [x.shape[1], fmaps], gain=gain, use_wscale=use_wscale)
     return tf.matmul(x, w)
 
 #----------------------------------------------------------------------------
 # Convolutional layer.
 
-def conv2d(x, fmaps, kernel, gain=np.sqrt(2), use_wscale=False):
+def conv2d(x, name_prefix, fmaps, kernel, gain=np.sqrt(2), use_wscale=False):
     assert kernel >= 1 and kernel % 2 == 1
-    w = get_weight([kernel, kernel, x.shape[1], fmaps], gain=gain, use_wscale=use_wscale)
+    w = get_weight(name_prefix, [kernel, kernel, x.shape[1], fmaps], gain=gain, use_wscale=use_wscale)
     return tf.nn.conv2d(x, w, strides=[1,1,1,1], padding='SAME', data_format='NCHW')
 
 #----------------------------------------------------------------------------
 # Apply bias to the given activation tensor.
 
-def apply_bias(x):
-    b = tf.Variable(VARIABLES.get(tf.compat.v1.get_variable_scope().name + '/bias'), name='bias')
+def apply_bias(x, name_prefix):
+    b = tf.Variable(VARIABLES.get(name_prefix + '/bias'), name='bias')
     if len(x.shape) == 2:
         return x + b
     else:
@@ -112,26 +112,32 @@ def G_paper(
     
     # Building blocks.
     def block(x, res): # res = 2..resolution_log2
-        with tf.compat.v1.variable_scope(f'{2**res}x{2**res}'):
-            if res == 2:  # 4x4
-                x = PixelNormLayer()(x)
-                with tf.compat.v1.variable_scope('Dense'):
-                    x = dense(x, fmaps=nf(res-1)*16, gain=np.sqrt(2)/4, use_wscale=use_wscale) # override gain to match the original Theano implementation
-                    x = tf.reshape(x, [-1, nf(res-1), 4, 4])
-                    x = PixelNormLayer()(act(apply_bias(x)))
-                with tf.compat.v1.variable_scope('Conv'):
-                    x = PixelNormLayer()(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
-            else: # 8x8 and up
-                x = upscale2d(x)
-                with tf.compat.v1.variable_scope('Conv0'):
-                    x = PixelNormLayer()(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
-                with tf.compat.v1.variable_scope('Conv1'):
-                    x = PixelNormLayer()(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
-            return x
+        name_prefix = f'{2**res}x{2**res}'
+        if res == 2:  # 4x4
+            x = PixelNormLayer()(x)
+            x = dense(x, name_prefix=name_prefix + '/Dense', fmaps=nf(res-1)*16, gain=np.sqrt(2)/4, use_wscale=use_wscale) # override gain to match the original Theano implementation
+            x = tf.reshape(x, [-1, nf(res-1), 4, 4])
+            x = PixelNormLayer()(act(apply_bias(x, name_prefix=name_prefix + '/Dense')))
+
+            x = PixelNormLayer()(act(
+                apply_bias(conv2d(x, name_prefix=name_prefix + '/Conv', fmaps=nf(res-1), kernel=3, use_wscale=use_wscale),
+                name_prefix=name_prefix + '/Conv')))
+        else: # 8x8 and up
+            x = upscale2d(x)
+            x = PixelNormLayer()(act(apply_bias(
+                conv2d(x, name_prefix=name_prefix + '/Conv0', fmaps=nf(res-1), kernel=3, use_wscale=use_wscale),
+                name_prefix=name_prefix + '/Conv0')))
+
+            x = PixelNormLayer()(act(apply_bias(
+                conv2d(x, name_prefix=name_prefix + '/Conv1', fmaps=nf(res-1), kernel=3, use_wscale=use_wscale),
+                name_prefix=name_prefix + '/Conv1')))
+        return x
     def torgb(x, res): # res = 2..resolution_log2
         lod = resolution_log2 - res
-        with tf.compat.v1.variable_scope(f'ToRGB_lod{lod}'):
-            return apply_bias(conv2d(x, fmaps=num_channels, kernel=1, gain=1, use_wscale=use_wscale))
+        name_prefix = f'ToRGB_lod{lod}'
+        return apply_bias(
+            conv2d(x, name_prefix, fmaps=num_channels, kernel=1, gain=1, use_wscale=use_wscale),
+            name_prefix)
 
     # Recursive structure: complex but efficient.
     def grow(x, res, lod):
