@@ -84,6 +84,8 @@ class Network:
 
         self.mirrored_strategy = tf.distribute.MirroredStrategy()
 
+        variables = dict(state['variables'])
+
         with self.mirrored_strategy.scope():
             with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
                 assert tf.get_variable_scope().name == self.scope
