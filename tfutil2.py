@@ -37,7 +37,7 @@ class Network:
         # self.mirrored_strategy = tf.distribute.MirroredStrategy()
         # with self.mirrored_strategy.scope():
 
-        with tf.variable_scope('', reuse=tf.AUTO_REUSE):
+        with tf.compat.v1.variable_scope('', reuse=tf.compat.v1.AUTO_REUSE):
             self.latents_in = tf.keras.Input(name='latents_in', shape=[512])
             self.output = networks2.G_paper(self.latents_in, **state['static_kwargs'])
 
@@ -53,7 +53,7 @@ class Network:
         variable_values = dict(state['variables'])
 
         operations = []
-        for variable in tf.global_variables():
+        for variable in tf.compat.v1.global_variables():
             key = variable.name[:-2]  # Remove :0
             if re.match('.*_[0-9]', key):  # Remove duplicates like _1
                 key = key[:-2]
@@ -61,7 +61,7 @@ class Network:
             value = variable_values[key]
             operations.append(variable.assign(value))
 
-        tf.get_default_session().run(operations)
+        tf.compat.v1.get_default_session().run(operations)
 
 
         # self.keras_model = tf.keras.Model(inputs=(self.latents_in, self.label_in), outputs=self.output)
@@ -74,7 +74,7 @@ class Network:
         feed_dict = {
             self.latents_in: latents
         }
-        result = tf.get_default_session().run(self.output, feed_dict)
+        result = tf.compat.v1.get_default_session().run(self.output, feed_dict)
         return result
 
     def run_keras(self, latents):
