@@ -34,27 +34,25 @@ class Network:
         # Set basic fields.
         assert state['version'] == 2
 
-        # self.mirrored_strategy = tf.distribute.MirroredStrategy()
-        # with self.mirrored_strategy.scope():
+        self.mirrored_strategy = tf.distribute.MirroredStrategy()
 
-        with tf.compat.v1.variable_scope('', reuse=tf.compat.v1.AUTO_REUSE):
+        with self.mirrored_strategy.scope(), tf.compat.v1.variable_scope('', reuse=tf.compat.v1.AUTO_REUSE):
             self.latents_in = tf.keras.Input(name='latents_in', shape=[512])
             self.output = networks2.G_paper(self.latents_in, **state['static_kwargs'])
 
-        variable_values = dict(state['variables'])
-        operations = []
-        for variable in tf.compat.v1.global_variables():
-            key = variable.name[:-2]  # Remove :0
-            if re.match('.*_[0-9]', key):  # Remove duplicates like _1
-                key = key[:-2]
-            print(variable.name, key)
-            value = variable_values[key]
-            operations.append(variable.assign(value))
+            variable_values = dict(state['variables'])
+            operations = []
+            for variable in tf.compat.v1.global_variables():
+                key = variable.name[:-2]  # Remove :0
+                if re.match('.*_[0-9]', key):  # Remove duplicates like _1
+                    key = key[:-2]
+                print(variable.name, key)
+                value = variable_values[key]
+                operations.append(variable.assign(value))
 
-        tf.compat.v1.get_default_session().run(operations)
+            tf.compat.v1.get_default_session().run(operations)
 
-
-        # self.keras_model = tf.keras.Model(inputs=(self.latents_in, self.label_in), outputs=self.output)
+            self.keras_model = tf.keras.Model(inputs=self.latents_in, outputs=self.output)
 
 
     def run(self, latents):
