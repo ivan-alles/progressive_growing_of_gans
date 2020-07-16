@@ -105,8 +105,6 @@ def G_paper(
     latent_size         = None,         # Dimensionality of the latent vectors. None = min(fmap_base, fmap_max).
     normalize_latents   = True,         # Normalize latent vectors before feeding them to the network?
     use_wscale          = True,         # Enable equalized learning rate?
-    use_pixelnorm       = True,         # Enable pixelwise feature vector normalization?
-    pixelnorm_epsilon   = 1e-8,         # Constant epsilon for pixelwise feature vector normalization.
     dtype               = 'float32',    # Data type to use for activations and outputs.
     **kwargs # Use to check a possibly pickled unsupported in TF2 version values.
 ):
@@ -116,12 +114,15 @@ def G_paper(
 
     check_arg('fused_scale', False)
     check_arg('use_leakyrelu', True)
+    check_arg('use_pixelnorm', True)
+    check_arg('pixelnorm_epsilon', 1e-8)
 
     resolution_log2 = int(np.log2(resolution))
     assert resolution == 2**resolution_log2 and resolution >= 4
-    def nf(stage): return min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
-    def PN(x): return pixel_norm(x, epsilon=pixelnorm_epsilon) if use_pixelnorm else x
-    if latent_size is None: latent_size = nf(0)
+    def nf(stage):
+        return min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
+    if latent_size is None:
+        latent_size = nf(0)
     act = leaky_relu
     
     latents_in.set_shape([None, latent_size])
@@ -133,19 +134,19 @@ def G_paper(
     def block(x, res): # res = 2..resolution_log2
         with tf.variable_scope('%dx%d' % (2**res, 2**res)):
             if res == 2: # 4x4
-                if normalize_latents: x = pixel_norm(x, epsilon=pixelnorm_epsilon)
+                if normalize_latents: x = pixel_norm(x)
                 with tf.variable_scope('Dense'):
                     x = dense(x, fmaps=nf(res-1)*16, gain=np.sqrt(2)/4, use_wscale=use_wscale) # override gain to match the original Theano implementation
                     x = tf.reshape(x, [-1, nf(res-1), 4, 4])
-                    x = PN(act(apply_bias(x)))
+                    x = pixel_norm(act(apply_bias(x)))
                 with tf.variable_scope('Conv'):
-                    x = PN(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
+                    x = pixel_norm(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
             else: # 8x8 and up
                 x = upscale2d(x)
                 with tf.variable_scope('Conv0'):
-                    x = PN(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
+                    x = pixel_norm(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
                 with tf.variable_scope('Conv1'):
-                    x = PN(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
+                    x = pixel_norm(act(apply_bias(conv2d(x, fmaps=nf(res-1), kernel=3, use_wscale=use_wscale))))
             return x
     def torgb(x, res): # res = 2..resolution_log2
         lod = resolution_log2 - res
