@@ -12,7 +12,7 @@ import PIL.Image
 
 import tfutil2
 
-#  Needed for tf.compat.v1.placeholder
+# Needed for tf.compat.v1.placeholder
 tf.compat.v1.disable_eager_execution()
 
 #  Needed for the original code to run. The pre-trained models are pickled with the code.

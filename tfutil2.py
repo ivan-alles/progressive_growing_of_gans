@@ -52,9 +52,6 @@ class Network:
     """
     Unpickles a trained network to convert it to TF2. Only generator is supported.
     """
-    # Run initializers for all variables defined by this network.
-    def reset_vars(self):
-        run([var.initializer for var in self.vars.values()])
 
     # Get the local name of a given variable, excluding any surrounding name scopes.
     def get_var_localname(self, var_or_globalname):
@@ -99,7 +96,6 @@ class Network:
             self.trainables = OrderedDict(
                 [(self.get_var_localname(var), var) for var in tf.trainable_variables(self.scope + '/')])
 
-            self.reset_vars()
             set_vars({self.find_var(name): value for name, value in state['variables']})
 
             self.keras_model = tf.keras.Model(inputs=(self.latents_in, self.label_in), outputs=self.output)
