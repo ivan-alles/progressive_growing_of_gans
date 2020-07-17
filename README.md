@@ -5,7 +5,7 @@ This repo is a fork of the great work **[Progressive Growing of GANs for Improve
 
 ## Setup
 
-1. Pull the repository.
+1. Clone the repository.
 2. Install the dependencies with `pipenv sync`.
 3. Optionally install the required drivers, etc. for **[TensorFlow 2](https://www.tensorflow.org/install/gpu)**.
 
