@@ -10,39 +10,10 @@ import tensorflow as tf
 
 VARIABLES = None
 
-#----------------------------------------------------------------------------
 
 def lerp(a, b, t):
     return a + (b - a) * t
 
-#----------------------------------------------------------------------------
-# Get/create weight tensor for a convolutional or fully-connected layer.
-
-def get_weight(name_prefix, shape, gain=np.sqrt(2)):
-    weight = tf.Variable(VARIABLES.get(name_prefix + '/weight'), name='weight')
-    fan_in = np.prod(shape[:-1])
-    std = gain / np.sqrt(fan_in)  # He init
-    print(f'{name_prefix} {shape} {fan_in} {std}')
-    weight = weight * std
-    return weight
-
-#----------------------------------------------------------------------------
-# Convolutional layer.
-
-def conv2d(x, name_prefix, fmaps, kernel, gain=np.sqrt(2)):
-    assert kernel >= 1 and kernel % 2 == 1
-    w = get_weight(name_prefix, [kernel, kernel, x.shape[1], fmaps], gain=gain)
-    return tf.nn.conv2d(x, w, strides=[1,1,1,1], padding='SAME', data_format='NCHW')
-
-#----------------------------------------------------------------------------
-# Apply bias to the given activation tensor.
-
-def apply_bias(x, name_prefix):
-    b = tf.Variable(VARIABLES.get(name_prefix + '/bias'), name='bias')
-    if len(x.shape) == 2:
-        return x + b
-    else:
-        return x + tf.reshape(b, [1, -1, 1, 1])
 
 class PixelNormLayer(tf.keras.layers.Layer):
     """
@@ -51,20 +22,35 @@ class PixelNormLayer(tf.keras.layers.Layer):
     def call(self, x):
         return x / tf.sqrt(tf.reduce_mean(tf.square(x), axis=1, keepdims=True) + 1e-8)
 
+
 def get_weight_std(shape, gain):
     fan_in = np.prod(shape[:-1])
     std = gain / np.sqrt(fan_in)  # He init
+    # print(f'{shape} {fan_in} {std}')
     return std
 
+
 def make_conv2d(x, filters, kernel_size, name_prefix, activation=None, gain=np.sqrt(2)):
-    y = apply_bias(conv2d(x, name_prefix=name_prefix, fmaps=filters, kernel=kernel_size, gain=gain),
-                   name_prefix=name_prefix)
-    if activation is not None:
-        y = activation(y)
+    """
+    Create and initialize a Conv2D layer for given parameters.
+    """
+
+    conv_layer = tf.keras.layers.Conv2D(
+        filters,
+        kernel_size,
+        activation=activation,
+        padding='same',
+        data_format='channels_first')
+    y = conv_layer(x)
+
+    std = get_weight_std((kernel_size, kernel_size, x.shape[1], filters), gain=gain)
+    weight_value = VARIABLES.get(name_prefix + '/weight') * std
+    bias_value = VARIABLES.get(name_prefix + '/bias')
+    conv_layer.kernel.assign(weight_value)
+    conv_layer.bias.assign(bias_value)
+
     return y
 
-#----------------------------------------------------------------------------
-# Generator network used in the paper.
 
 def G_paper(
     latents_in,                         # First input: Latent vectors [minibatch, latent_size].
@@ -75,7 +61,11 @@ def G_paper(
     fmap_decay          = 1.0,          # log2 feature map reduction when doubling the resolution.
     fmap_max            = 512,          # Maximum number of feature maps in any layer.
     **kwargs                            # Used to check a possibly pickled unsupported in TF2 version values.
-):
+    ):
+    """
+    Generator network used in the paper.
+    """
+
     def check_arg(name, expected_value):
         if name in kwargs and kwargs[name] != expected_value:
             raise ValueError('TF2 version does not support this value')
@@ -100,7 +90,7 @@ def G_paper(
     act = tf.nn.leaky_relu
     
     # Building blocks.
-    def block(x, res): # res = 2..resolution_log2
+    def block(x, res):  # res = 2..resolution_log2
         name_prefix = f'{2**res}x{2**res}'
         if res == 2:  # 4x4
             x = PixelNormLayer()(x)
@@ -118,7 +108,8 @@ def G_paper(
 
             x = make_conv2d(x, nf(res - 1), 3, name_prefix + '/Conv', act)
             x = PixelNormLayer()(x)
-        else: # 8x8 and up
+
+        else:  # 8x8 and up
             x = tf.keras.layers.UpSampling2D(data_format='channels_first', name=name_prefix)(x)
             x = make_conv2d(x, nf(res - 1), 3, name_prefix + '/Conv0', act)
             x = PixelNormLayer()(x)
@@ -127,7 +118,8 @@ def G_paper(
             x = PixelNormLayer()(x)
 
         return x
-    def torgb(x, res): # res = 2..resolution_log2
+
+    def to_rgb(x, res):  # res = 2..resolution_log2
         lod = resolution_log2 - res
         return make_conv2d(x, num_channels, 1, f'ToRGB_lod{lod}', None, gain=1)
 
@@ -137,7 +129,7 @@ def G_paper(
         if lod > 0:
             img = grow(y, res + 1, lod - 1)
         else:
-            img = tf.keras.layers.UpSampling2D(size=2 ** lod, data_format='channels_first')(torgb(y, res))
+            img = tf.keras.layers.UpSampling2D(size=2 ** lod, data_format='channels_first')(to_rgb(y, res))
         return img
 
     images_out = grow(latents_in, 2, resolution_log2 - 2)
