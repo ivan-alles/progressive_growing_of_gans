@@ -16,15 +16,6 @@ import networks2
 # Use it to skip unpickling unnecessary objects.
 UNPICKLE_COUNTER = 0
 
-# TODO(ia): rework this, can be just a dictionary.
-class UnpickledVariables:
-    def __init__(self, variables):
-        self._variables = dict(variables)
-
-    def get(self, name):
-        # TODO(ia): some variables are created with the same value. How to avoid duplicates?
-        return self._variables[name]
-
 class Network:
     """
     Unpickles a trained network to convert it to TF2. Only generator is supported.
@@ -43,9 +34,7 @@ class Network:
         # Set basic fields.
         assert state['version'] == 2
 
-        variables = UnpickledVariables(state['variables'])
-
         self.latents_in = tf.keras.Input(name='latents_in', shape=[512])
-        output = networks2.G_paper(self.latents_in, variables, **state['static_kwargs'])
+        output = networks2.G_paper(self.latents_in, state['variables'], **state['static_kwargs'])
         self.keras_model = tf.keras.Model(inputs=self.latents_in, outputs=output)
 

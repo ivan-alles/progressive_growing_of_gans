@@ -10,6 +10,20 @@ import tensorflow as tf
 
 VARIABLES = None
 
+class UnpickledVariables:
+    """
+    A storage for variables values from a pickled model.
+    """
+    def __init__(self, variables):
+        """
+        Create object.
+        :param variables a list of (name, value) tuples from the pickle file.
+        """
+        self._variables = dict(variables)
+
+    def get(self, name):
+        # TODO(ia): some variables are created with the same value. How to avoid duplicates?
+        return self._variables[name]
 
 def lerp(a, b, t):
     return a + (b - a) * t
@@ -82,7 +96,7 @@ def G_paper(
     check_arg('use_wscale', True)
 
     global VARIABLES
-    VARIABLES = variables
+    VARIABLES = UnpickledVariables(variables)
 
     resolution_log2 = int(np.log2(resolution))
     assert resolution == 2**resolution_log2 and resolution >= 4
