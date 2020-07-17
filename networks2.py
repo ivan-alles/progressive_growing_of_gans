@@ -8,8 +8,6 @@
 import numpy as np
 import tensorflow as tf
 
-VARIABLES = None
-
 class UnpickledVariables:
     """
     A storage for variables values from a pickled model.
@@ -21,9 +19,13 @@ class UnpickledVariables:
         """
         self._variables = dict(variables)
 
+        # A prefix for variable names used to search in the storage.
+        self.name_prefix = ''
+
     def get(self, name):
         # TODO(ia): some variables are created with the same value. How to avoid duplicates?
-        return self._variables[name]
+        key = self.name_prefix + '/' + name
+        return self._variables[key]
 
 def lerp(a, b, t):
     return a + (b - a) * t
@@ -44,7 +46,7 @@ def get_weight_std(shape, gain):
     return std
 
 
-def make_conv2d(x, filters, kernel_size, name_prefix, activation=None, gain=np.sqrt(2)):
+def make_conv2d(x, filters, kernel_size, variables, activation=None, gain=np.sqrt(2)):
     """
     Create and initialize a Conv2D layer for given parameters.
     """
@@ -55,12 +57,12 @@ def make_conv2d(x, filters, kernel_size, name_prefix, activation=None, gain=np.s
         activation=activation,
         padding='same',
         data_format='channels_first',
-        name=name_prefix)
+        name=variables.name_prefix)
     y = conv_layer(x)
 
     std = get_weight_std((kernel_size, kernel_size, x.shape[1], filters), gain=gain)
-    weight_value = VARIABLES.get(name_prefix + '/weight') * std
-    bias_value = VARIABLES.get(name_prefix + '/bias')
+    weight_value = variables.get('weight') * std
+    bias_value = variables.get('bias')
     conv_layer.kernel.assign(weight_value)
     conv_layer.bias.assign(bias_value)
 
@@ -95,8 +97,7 @@ def G_paper(
     check_arg('normalize_latents', True)
     check_arg('use_wscale', True)
 
-    global VARIABLES
-    VARIABLES = UnpickledVariables(variables)
+    variables = UnpickledVariables(variables)
 
     resolution_log2 = int(np.log2(resolution))
     assert resolution == 2**resolution_log2 and resolution >= 4
@@ -110,34 +111,40 @@ def G_paper(
         if res == 2:  # 4x4
             x = PixelNormLayer()(x)
 
+            variables.name_prefix = name_prefix + '/Dense'
             dense_layer = tf.keras.layers.Dense(nf(res - 1) * 16, input_shape=x.shape[1:],
-                                                use_bias=False, name=name_prefix)
+                                                use_bias=False, name=variables.name_prefix)
             std = get_weight_std((x.shape[1], dense_layer.units), gain=np.sqrt(2)/4)
             x = dense_layer(x)
-            weight_value = VARIABLES.get(name_prefix + '/Dense/weight') * std
+
+            weight_value = variables.get('weight') * std
             dense_layer.kernel.assign(weight_value)
             x = tf.keras.layers.Reshape((nf(res - 1), 4, 4))(x)
-            bias_value = VARIABLES.get(name_prefix + '/Dense/bias').reshape(1, -1, 1, 1)
-            bias = tf.Variable(bias_value, name=name_prefix + '/Dense/bias')
+            bias_value = variables.get('bias').reshape(1, -1, 1, 1)
+            bias = tf.Variable(bias_value, name=variables.name_prefix + '/bias')
             x = act(tf.keras.layers.Add()([x, bias]))
             x = PixelNormLayer()(x)
 
-            x = make_conv2d(x, nf(res - 1), 3, name_prefix + '/Conv', act)
+            variables.name_prefix = name_prefix + '/Conv'
+            x = make_conv2d(x, nf(res - 1), 3, variables, act)
             x = PixelNormLayer()(x)
 
         else:  # 8x8 and up
             x = tf.keras.layers.UpSampling2D(data_format='channels_first', name=name_prefix)(x)
-            x = make_conv2d(x, nf(res - 1), 3, name_prefix + '/Conv0', act)
+            variables.name_prefix = name_prefix + '/Conv0'
+            x = make_conv2d(x, nf(res - 1), 3, variables, act)
             x = PixelNormLayer()(x)
 
-            x = make_conv2d(x, nf(res - 1), 3, name_prefix + '/Conv1', act)
+            variables.name_prefix = name_prefix + '/Conv1'
+            x = make_conv2d(x, nf(res - 1), 3, variables, act)
             x = PixelNormLayer()(x)
 
         return x
 
     def to_rgb(x, res):  # res = 2..resolution_log2
         lod = resolution_log2 - res
-        return make_conv2d(x, num_channels, 1, f'ToRGB_lod{lod}', None, gain=1)
+        variables.name_prefix = f'ToRGB_lod{lod}'
+        return make_conv2d(x, num_channels, 1, variables, None, gain=1)
 
     # Recursive structure: complex but efficient.
     def grow(x, res, lod):
