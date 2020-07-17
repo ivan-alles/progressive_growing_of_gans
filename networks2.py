@@ -40,7 +40,8 @@ def make_conv2d(x, filters, kernel_size, name_prefix, activation=None, gain=np.s
         kernel_size,
         activation=activation,
         padding='same',
-        data_format='channels_first')
+        data_format='channels_first',
+        name=name_prefix)
     y = conv_layer(x)
 
     std = get_weight_std((kernel_size, kernel_size, x.shape[1], filters), gain=gain)
@@ -95,7 +96,8 @@ def G_paper(
         if res == 2:  # 4x4
             x = PixelNormLayer()(x)
 
-            dense_layer = tf.keras.layers.Dense(nf(res - 1) * 16, input_shape=x.shape[1:], use_bias=False)
+            dense_layer = tf.keras.layers.Dense(nf(res - 1) * 16, input_shape=x.shape[1:],
+                                                use_bias=False, name=name_prefix)
             std = get_weight_std((x.shape[1], dense_layer.units), gain=np.sqrt(2)/4)
             x = dense_layer(x)
             weight_value = VARIABLES.get(name_prefix + '/Dense/weight') * std
