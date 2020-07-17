@@ -29,9 +29,15 @@ class UnpickledVariables:
         print(f'Total number of unpickled parameters: {num_parameters}')
 
     def get(self, name):
-        # TODO(ia): some variables are created with the same value. How to avoid duplicates?
+        """
+        Get value of the variable with the given name, taking name_prefix into account.
+        """
         key = self.name_prefix + '/' + name
-        return self._variables[key]
+        value = self._variables[key]
+        # Remove the variable to ensure that we read each one exactly once.
+        del self._variables[key]
+        return value
+
 
 def lerp(a, b, t):
     return a + (b - a) * t
