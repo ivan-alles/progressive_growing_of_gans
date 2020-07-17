@@ -1,7 +1,9 @@
-# A Port of the generator of the Progressive Growing of GANs network to TensorFlow 2
+# A Port of the Progressive Growing of GANs Network to TensorFlow 2
 
 This repo is a fork of the great work **[Progressive Growing of GANs for Improved Quality, Stability, and Variation
 ](https://github.com/tkarras/progressive_growing_of_gans)** by **Tero Karras** (NVIDIA), **Timo Aila** (NVIDIA), **Samuli Laine** (NVIDIA), **Jaakko Lehtinen** (NVIDIA and Aalto University).
+
+I ported the generator model of the network to TensorFlow 2 format, using `tf.keras` layers wherever possible. Now the inference runs natively on TensorFlow 2. The other parts of the newtork and the training are not re-implemented.
 
 ## Setup
 
