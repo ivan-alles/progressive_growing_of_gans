@@ -22,17 +22,9 @@ def get_weight(name_prefix, shape, gain=np.sqrt(2)):
     weight = tf.Variable(VARIABLES.get(name_prefix + '/weight'), name='weight')
     fan_in = np.prod(shape[:-1])
     std = gain / np.sqrt(fan_in)  # He init
+    print(f'{name_prefix} {shape} {fan_in} {std}')
     weight = weight * std
     return weight
-
-#----------------------------------------------------------------------------
-# Fully-connected layer.
-
-def dense(x, name_prefix, fmaps, gain=np.sqrt(2)):
-    if len(x.shape) > 2:
-        x = tf.reshape(x, [-1, np.prod([d for d in x.shape[1:]])])
-    w = get_weight(name_prefix, [x.shape[1], fmaps], gain=gain)
-    return tf.matmul(x, w)
 
 #----------------------------------------------------------------------------
 # Convolutional layer.
@@ -58,6 +50,11 @@ class PixelNormLayer(tf.keras.layers.Layer):
     """
     def call(self, x):
         return x / tf.sqrt(tf.reduce_mean(tf.square(x), axis=1, keepdims=True) + 1e-8)
+
+def get_weight_std(shape, gain):
+    fan_in = np.prod(shape[:-1])
+    std = gain / np.sqrt(fan_in)  # He init
+    return std
 
 #----------------------------------------------------------------------------
 # Generator network used in the paper.
@@ -101,12 +98,17 @@ def G_paper(
         if res == 2:  # 4x4
             x = PixelNormLayer()(x)
 
-            x = dense(x, name_prefix=name_prefix + '/Dense', fmaps=nf(res-1)*16, gain=np.sqrt(2)/4) # override gain to match the original Theano implementation
-            x = tf.reshape(x, [-1, nf(res-1), 4, 4])
-            x = act(apply_bias(x, name_prefix=name_prefix + '/Dense'))
+            dense_layer = tf.keras.layers.Dense(nf(res - 1) * 16, input_shape=x.shape[1:], use_bias=False)
+            std = get_weight_std((x.shape[1], dense_layer.units), gain=np.sqrt(2)/4)
+            x = dense_layer(x)
+            weight_value = VARIABLES.get(name_prefix + '/Dense/weight') * std
+            dense_layer.kernel.assign(weight_value)
+            x = tf.keras.layers.Reshape((nf(res - 1), 4, 4))(x)
+            bias_value = VARIABLES.get(name_prefix + '/Dense/bias').reshape(1, -1, 1, 1)
+            bias = tf.Variable(bias_value, name=name_prefix + '/Dense/bias')
+            x = act(tf.keras.layers.Add()([x, bias]))
 
             x = PixelNormLayer()(x)
-
             x = PixelNormLayer()(act(
                 apply_bias(conv2d(x, name_prefix=name_prefix + '/Conv', fmaps=nf(res-1), kernel=3),
                 name_prefix=name_prefix + '/Conv')))
