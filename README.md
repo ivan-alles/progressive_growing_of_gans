@@ -5,9 +5,10 @@ This repo is a fork of the great work **[Progressive Growing of GANs for Improve
 
 ## Setup
 
-1. Clone the repository.
-2. Install the dependencies with `pipenv sync`.
-3. Optionally install the required drivers, etc. for **[TensorFlow 2](https://www.tensorflow.org/install/gpu)**.
+1. Optionally install the required drivers, etc. for **[TensorFlow 2](https://www.tensorflow.org/install/gpu)**.
+2. Clone the repository.
+3. Install the dependencies with `pipenv sync`.
+4. Activate the pipenv environment with `pipenv shell`.
 
 ## Extract the generator model and save it as TensorFlow 2 Keras model
 
