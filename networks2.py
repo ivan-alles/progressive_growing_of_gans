@@ -56,6 +56,13 @@ def get_weight_std(shape, gain):
     std = gain / np.sqrt(fan_in)  # He init
     return std
 
+def make_conv2d(x, filters, kernel_size, name_prefix, activation=None, gain=np.sqrt(2)):
+    y = apply_bias(conv2d(x, name_prefix=name_prefix, fmaps=filters, kernel=kernel_size, gain=gain),
+                   name_prefix=name_prefix)
+    if activation is not None:
+        y = activation(y)
+    return y
+
 #----------------------------------------------------------------------------
 # Generator network used in the paper.
 
@@ -107,27 +114,22 @@ def G_paper(
             bias_value = VARIABLES.get(name_prefix + '/Dense/bias').reshape(1, -1, 1, 1)
             bias = tf.Variable(bias_value, name=name_prefix + '/Dense/bias')
             x = act(tf.keras.layers.Add()([x, bias]))
-
             x = PixelNormLayer()(x)
-            x = PixelNormLayer()(act(
-                apply_bias(conv2d(x, name_prefix=name_prefix + '/Conv', fmaps=nf(res-1), kernel=3),
-                name_prefix=name_prefix + '/Conv')))
+
+            x = make_conv2d(x, nf(res - 1), 3, name_prefix + '/Conv', act)
+            x = PixelNormLayer()(x)
         else: # 8x8 and up
             x = tf.keras.layers.UpSampling2D(data_format='channels_first', name=name_prefix)(x)
-            x = PixelNormLayer()(act(apply_bias(
-                conv2d(x, name_prefix=name_prefix + '/Conv0', fmaps=nf(res-1), kernel=3),
-                name_prefix=name_prefix + '/Conv0')))
+            x = make_conv2d(x, nf(res - 1), 3, name_prefix + '/Conv0', act)
+            x = PixelNormLayer()(x)
 
-            x = PixelNormLayer()(act(apply_bias(
-                conv2d(x, name_prefix=name_prefix + '/Conv1', fmaps=nf(res-1), kernel=3),
-                name_prefix=name_prefix + '/Conv1')))
+            x = make_conv2d(x, nf(res - 1), 3, name_prefix + '/Conv1', act)
+            x = PixelNormLayer()(x)
+
         return x
     def torgb(x, res): # res = 2..resolution_log2
         lod = resolution_log2 - res
-        name_prefix = f'ToRGB_lod{lod}'
-        return apply_bias(
-            conv2d(x, name_prefix, fmaps=num_channels, kernel=1, gain=1),
-            name_prefix)
+        return make_conv2d(x, num_channels, 1, f'ToRGB_lod{lod}', None, gain=1)
 
     # Recursive structure: complex but efficient.
     def grow(x, res, lod):
