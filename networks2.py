@@ -100,9 +100,12 @@ def G_paper(
         name_prefix = f'{2**res}x{2**res}'
         if res == 2:  # 4x4
             x = PixelNormLayer()(x)
+
             x = dense(x, name_prefix=name_prefix + '/Dense', fmaps=nf(res-1)*16, gain=np.sqrt(2)/4) # override gain to match the original Theano implementation
             x = tf.reshape(x, [-1, nf(res-1), 4, 4])
-            x = PixelNormLayer()(act(apply_bias(x, name_prefix=name_prefix + '/Dense')))
+            x = act(apply_bias(x, name_prefix=name_prefix + '/Dense'))
+
+            x = PixelNormLayer()(x)
 
             x = PixelNormLayer()(act(
                 apply_bias(conv2d(x, name_prefix=name_prefix + '/Conv', fmaps=nf(res-1), kernel=3),
