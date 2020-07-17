@@ -22,6 +22,12 @@ class UnpickledVariables:
         # A prefix for variable names used to search in the storage.
         self.name_prefix = ''
 
+        num_parameters = 0
+        for value in self._variables.values():
+            num_parameters += value.size
+
+        print(f'Total number of unpickled parameters: {num_parameters}')
+
     def get(self, name):
         # TODO(ia): some variables are created with the same value. How to avoid duplicates?
         key = self.name_prefix + '/' + name
