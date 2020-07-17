@@ -54,24 +54,6 @@ def apply_bias(x, name_prefix):
     else:
         return x + tf.reshape(b, [1, -1, 1, 1])
 
-class Upscale2dLayer(tf.keras.layers.Layer):
-    """
-    Nearest-neighbor upscaling layer.
-    """
-    def __init__(self, factor=2, **kwargs):
-        assert isinstance(factor, int) and factor >= 1
-        super().__init__(**kwargs)
-        self._factor = factor
-
-    def call(self, x):
-        if self._factor == 1:
-            return x
-        s = x.shape
-        x = tf.reshape(x, [-1, s[1], s[2], 1, s[3], 1])
-        x = tf.tile(x, [1, 1, 1, self._factor, 1, self._factor])
-        x = tf.reshape(x, [-1, s[1], s[2] * self._factor, s[3] * self._factor])
-        return x
-
 class PixelNormLayer(tf.keras.layers.Layer):
     """
     Pixelwise feature vector normalization.
@@ -128,7 +110,7 @@ def G_paper(
                 apply_bias(conv2d(x, name_prefix=name_prefix + '/Conv', fmaps=nf(res-1), kernel=3, use_wscale=use_wscale),
                 name_prefix=name_prefix + '/Conv')))
         else: # 8x8 and up
-            x = Upscale2dLayer(name=name_prefix + '/Upscale')(x)
+            x = tf.keras.layers.UpSampling2D(data_format='channels_first', name=name_prefix)(x)
             x = PixelNormLayer()(act(apply_bias(
                 conv2d(x, name_prefix=name_prefix + '/Conv0', fmaps=nf(res-1), kernel=3, use_wscale=use_wscale),
                 name_prefix=name_prefix + '/Conv0')))
@@ -150,7 +132,7 @@ def G_paper(
         if lod > 0:
             img = grow(y, res + 1, lod - 1)
         else:
-            img = Upscale2dLayer(2 ** lod)(torgb(y, res))
+            img = tf.keras.layers.UpSampling2D(size=2 ** lod, data_format='channels_first')(torgb(y, res))
         return img
 
     images_out = grow(latents_in, 2, resolution_log2 - 2)
