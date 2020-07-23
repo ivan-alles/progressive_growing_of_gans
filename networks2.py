@@ -48,7 +48,7 @@ class PixelNormLayer(tf.keras.layers.Layer):
     Pixelwise feature vector normalization.
     """
     def call(self, x):
-        return x / tf.sqrt(tf.reduce_mean(tf.square(x), axis=1, keepdims=True) + 1e-8)
+        return x / tf.sqrt(tf.reduce_mean(tf.square(x), axis=-1, keepdims=True) + 1e-8)
 
 
 def get_weight_std(shape, gain):
@@ -68,11 +68,10 @@ def make_conv2d(x, filters, kernel_size, variables, activation=None, gain=np.sqr
         kernel_size,
         activation=activation,
         padding='same',
-        data_format='channels_first',
         name=variables.name_prefix)
     y = conv_layer(x)
 
-    std = get_weight_std((kernel_size, kernel_size, x.shape[1], filters), gain=gain)
+    std = get_weight_std((kernel_size, kernel_size, x.shape[-1], filters), gain=gain)
     weight_value = variables.get('weight') * std
     bias_value = variables.get('bias')
     conv_layer.kernel.assign(weight_value)
@@ -132,7 +131,8 @@ def G_paper(
             weight_value = variables.get('weight') * std
             dense_layer.kernel.assign(weight_value)
             x = tf.keras.layers.Reshape((nf(res - 1), 4, 4))(x)
-            bias_value = variables.get('bias').reshape(1, -1, 1, 1)
+            x = tf.transpose(x, [0, 2, 3, 1])
+            bias_value = variables.get('bias').reshape(1, 1, 1, -1)
             bias = tf.Variable(bias_value, name=variables.name_prefix + '/bias')
             x = act(tf.keras.layers.Add()([x, bias]))
             x = PixelNormLayer()(x)
@@ -142,7 +142,7 @@ def G_paper(
             x = PixelNormLayer()(x)
 
         else:  # 8x8 and up
-            x = tf.keras.layers.UpSampling2D(data_format='channels_first', name=name_prefix)(x)
+            x = tf.keras.layers.UpSampling2D(name=name_prefix)(x)
             variables.name_prefix = name_prefix + '/Conv0'
             x = make_conv2d(x, nf(res - 1), 3, variables, act)
             x = PixelNormLayer()(x)
@@ -164,7 +164,7 @@ def G_paper(
         if lod > 0:
             img = grow(y, res + 1, lod - 1)
         else:
-            img = tf.keras.layers.UpSampling2D(size=2 ** lod, data_format='channels_first')(to_rgb(y, res))
+            img = tf.keras.layers.UpSampling2D(size=2 ** lod)(to_rgb(y, res))
         return img
 
     images_out = grow(latents_in, 2, resolution_log2 - 2)
