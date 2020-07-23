@@ -132,7 +132,7 @@ def G_paper(
             dense_layer.kernel.assign(weight_value)
             x = tf.keras.layers.Reshape((nf(res - 1), 4, 4))(x)
             x = tf.transpose(x, [0, 2, 3, 1])
-            bias_value = variables.get('bias').reshape(1, 1, 1, -1)
+            bias_value = variables.get('bias').reshape(1, 1, -1)
             bias = tf.Variable(bias_value, name=variables.name_prefix + '/bias')
             x = act(tf.keras.layers.Add()([x, bias]))
             x = PixelNormLayer()(x)
