@@ -1,12 +1,13 @@
 
 .venv/
 __pycache__/
+.cache/
+dist/
 *.pkl
 *.png
 *.svg
-karras2018iclr-celebahq-1024x1024-weights.tf.data-00000-of-00001
-karras2018iclr-celebahq-1024x1024-weights.tf.index
-karras2018iclr-celebahq-1024x1024.json
-karras2018iclr-celebahq-1024x1024.txt
 checkpoint
-karras2018iclr-celebahq-1024x1024.tf/
+*.tf/
+*.tfjs/
+node_modules/
+karras2018iclr-celebahq-1024x1024.*
