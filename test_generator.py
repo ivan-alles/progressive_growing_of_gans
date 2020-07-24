@@ -16,8 +16,8 @@ latents = latents[[477, 56, 83, 887, 583, 391, 86, 340, 341, 415]]  # hand-picke
 
 images = generator.predict(latents)
 
-# Convert images to PIL-compatible format.
-images = np.clip(np.rint((images + 1.0) / 2.0 * 255.0), 0.0, 255.0).astype(np.uint8)  # [-1,1] => [0,255]
+# Convert to bytes in range [0, 255]
+images = np.rint(np.clip(images, 0, 1) * 255.0).astype(np.uint8)
 
 # Save images as PNG.
 for idx in range(images.shape[0]):

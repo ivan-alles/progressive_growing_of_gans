@@ -58,7 +58,7 @@ def get_weight_std(shape, gain):
     return std
 
 
-def make_conv2d(x, filters, kernel_size, variables, activation=None, gain=np.sqrt(2)):
+def make_conv2d(x, filters, kernel_size, variables, activation=None, gain=np.sqrt(2), factor=1, bias=0):
     """
     Create and initialize a Conv2D layer for given parameters.
     """
@@ -72,8 +72,8 @@ def make_conv2d(x, filters, kernel_size, variables, activation=None, gain=np.sqr
     y = conv_layer(x)
 
     std = get_weight_std((kernel_size, kernel_size, x.shape[-1], filters), gain=gain)
-    weight_value = variables.get('weight') * std
-    bias_value = variables.get('bias')
+    weight_value = variables.get('weight') * std * factor
+    bias_value = variables.get('bias') * factor + bias
     conv_layer.kernel.assign(weight_value)
     conv_layer.bias.assign(bias_value)
 
@@ -156,7 +156,11 @@ def G_paper(
     def to_rgb(x, res):  # res = 2..resolution_log2
         lod = resolution_log2 - res
         variables.name_prefix = f'ToRGB_lod{lod}'
-        return make_conv2d(x, num_channels, 1, variables, None, gain=1)
+        # As this is the last layer, apply the factor and bias to convert output range
+        # from [-1, 1] to [0, 1].
+        return make_conv2d(x, num_channels, 1, variables, None, gain=1,
+                           factor=0.5,
+                           bias=0.5)
 
     # Recursive structure: complex but efficient.
     def grow(x, res, lod):
