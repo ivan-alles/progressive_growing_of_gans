@@ -26,11 +26,11 @@ I tested these instruction under Windows.
 
 ## Convert to TensorFlow.js
 Conversion to TensorFlow.js requires a separate pipenv environment, otherwise TF will stop using GPU.
-I assume that you have done the previous steps and have `npm` installed.
+I assume that you have done the previous steps and have yarn installed.
 
 1. In a new terminal window, go to `js` directory.
 2. Install python dependencies: `pipenv sync`.
 3. Convert the model to TensorFlow.js format: `pipenv run convert.bat`.
-4. Install JavaScript dependencies: `npm install`.
-5. Run the browser app: `npm run watch`. The model will generate a random image and show 
+4. Install JavaScript dependencies: `yarn`.
+5. Run the browser app: `yarn demo`. The model will generate a random image and show 
    it in the browser window.

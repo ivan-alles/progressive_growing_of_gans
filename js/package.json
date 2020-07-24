@@ -3,16 +3,17 @@
   "version": "1.0.0",
   "description": "Convert a TensorFlow model to a TensorFlow.js format.",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "watch": "cross-env NODE_ENV=development parcel index.html --no-hmr --open"
-  },
   "author": "Ivan Alles",
   "license": "MIT",
   "dependencies": {
-    "@babel/core": "^7.10.5",
     "@tensorflow/tfjs": "^2.0.1",
-    "cross-env": "^7.0.2",
-    "parcel": "^1.12.4"
+    "add": "^2.0.6",
+    "yarn": "^1.22.4"
+  },
+  "devDependencies": {
+    "parcel": "^2.0.0-beta.1"
+  },
+  "scripts": {
+    "demo": "parcel index.html --open"
   }
 }
