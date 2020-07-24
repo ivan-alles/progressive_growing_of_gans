@@ -168,7 +168,7 @@ def G_paper(
         if lod > 0:
             img = grow(y, res + 1, lod - 1)
         else:
-            img = tf.keras.layers.UpSampling2D(size=2 ** lod)(to_rgb(y, res))
+            img = to_rgb(y, res)
         return img
 
     images_out = grow(latents_in, 2, resolution_log2 - 2)
