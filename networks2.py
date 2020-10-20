@@ -26,13 +26,17 @@ class UnpickledVariables:
         # Check min and max values of the variables, to find out whether a conversion to 16 bit is possible.
         # See https://www.tensorflow.org/js/guide/platform_environment
         min_var = 9e99
+        min_nz_var = 9e99
         max_var = -9e99
         for value in self._variables.values():
             num_parameters += value.size
-            min_var = min(value.min(), min_var)
-            max_var = max(value.max(), max_var)
+            min_value = abs(value.min())
+            min_var = min(min_value, min_var)
+            if min_value > 0:
+                min_nz_var = min(min_value, min_nz_var)
+            max_var = max(abs(value.max()), max_var)
 
-        print(f'Total number of unpickled parameters: {num_parameters}, min: {min_var}, max: {max_var}')
+        print(f'Total number of unpickled parameters: {num_parameters}, min: {min_var}, min nz: {min_nz_var}, max: {max_var}')
 
     def get(self, name):
         """
